@@ -8,6 +8,28 @@ export const metadata = {
   title: "Contact Us - Get in Touch",
   description:
     "Contact the DotaData team for questions, feedback, or support.",
+  keywords: [
+    "DotaData contact",
+    "Dota 2 support",
+    "Dota 2 analytics contact",
+    "Dota 2 feedback",
+  ],
+  openGraph: {
+    title: "Contact Us - Get in Touch",
+    description:
+      "Contact the DotaData team for questions, feedback, or support.",
+    type: "website",
+    url: "/contact",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Contact Us - Get in Touch",
+    description:
+      "Contact the DotaData team for questions, feedback, or support.",
+  },
+  alternates: {
+    canonical: "/contact",
+  },
 };
 
 export default function ContactPage() {

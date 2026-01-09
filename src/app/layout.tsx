@@ -53,6 +53,21 @@ export default function RootLayout({
       <body
         className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable} min-h-screen antialiased`}
       >
+        <Script id="site-ld-json" type="application/ld+json" strategy="afterInteractive">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            name: "DotaData",
+            url: "https://dotadata.com",
+            description:
+              "DotaData is a competitive Dota 2 analytics hub highlighting league trends, team performance, and patch shifts.",
+            publisher: {
+              "@type": "Organization",
+              name: "DotaData",
+              url: "https://dotadata.com",
+            },
+          })}
+        </Script>
         <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`} strategy="afterInteractive" />
         <Script id="ga4-init" strategy="afterInteractive">
           {`

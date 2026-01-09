@@ -11,6 +11,31 @@ export const metadata = {
   title: "DotaData - Professional Dota 2 Statistics, Team Analysis & League Data",
   description:
     "Comprehensive Dota 2 competitive statistics and analysis. Track professional matches, teams, and league performance data.",
+  keywords: [
+    "Dota 2 stats",
+    "Dota 2 esports",
+    "Dota 2 leagues",
+    "Dota 2 teams",
+    "Dota 2 match analysis",
+    "Dota 2 meta",
+    "Dota 2 analytics",
+  ],
+  openGraph: {
+    title: "DotaData - Professional Dota 2 Statistics, Team Analysis & League Data",
+    description:
+      "Comprehensive Dota 2 competitive statistics and analysis. Track professional matches, teams, and league performance data.",
+    type: "website",
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "DotaData - Professional Dota 2 Statistics, Team Analysis & League Data",
+    description:
+      "Comprehensive Dota 2 competitive statistics and analysis. Track professional matches, teams, and league performance data.",
+  },
+  alternates: {
+    canonical: "/",
+  },
 };
 
 const formatMinutes = (seconds: number) => `${(seconds / 60).toFixed(1)}m`;

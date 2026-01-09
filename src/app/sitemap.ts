@@ -28,7 +28,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     },
     {
-      url: `${baseUrl}/leagues/international`,
+      url: `${baseUrl}/the-international`,
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.8,

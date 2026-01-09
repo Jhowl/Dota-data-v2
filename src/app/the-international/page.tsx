@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Script from "next/script";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +18,29 @@ export const metadata = {
   title: "The International - Dota 2 World Championship",
   description:
     "Browse every edition of The International and explore aggregated match statistics across the premier Dota 2 event.",
+  keywords: [
+    "The International",
+    "Dota 2 TI",
+    "Dota 2 world championship",
+    "Dota 2 stats",
+    "Dota 2 esports",
+  ],
+  openGraph: {
+    title: "The International - Dota 2 World Championship",
+    description:
+      "Browse every edition of The International and explore aggregated match statistics across the premier Dota 2 event.",
+    type: "website",
+    url: "/the-international",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "The International - Dota 2 World Championship",
+    description:
+      "Browse every edition of The International and explore aggregated match statistics across the premier Dota 2 event.",
+  },
+  alternates: {
+    canonical: "/the-international",
+  },
 };
 
 const formatMinutes = (seconds: number) => `${(seconds / 60).toFixed(1)} min`;
@@ -93,22 +117,56 @@ export default async function InternationalPage() {
       .map(([heroId, total]) => ({ heroId, total }));
 
   return (
-    <div className="space-y-10">
+    <>
+      <Script id="ti-ld-json" type="application/ld+json" strategy="afterInteractive">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "EventSeries",
+          name: "The International",
+          sport: "Dota 2",
+          url: "https://dotadata.com/the-international",
+          organizer: {
+            "@type": "Organization",
+            name: "DotaData",
+            url: "https://dotadata.com",
+          },
+        })}
+      </Script>
+      <div className="space-y-10">
       <section className="space-y-4">
         <Badge className="w-fit bg-primary/10 text-primary">Premier event</Badge>
         <h1 className="font-display text-3xl font-semibold md:text-4xl">The International</h1>
         <p className="max-w-3xl text-muted-foreground">
-          The International is the premier annual Dota 2 world championship tournament. Browse every edition, view
-          aggregated match statistics, and explore event history.
+          The International is Dota 2&apos;s flagship world championship. This page brings every edition together,
+          combining match outcomes, hero trends, and standout performances into one unified history of the event.
         </p>
         <div className="rounded-2xl border-l-4 border-primary bg-primary/10 p-4 text-sm text-muted-foreground">
-          <strong className="text-foreground">About this page:</strong> Explore all editions, review aggregated match
-          statistics, and discover key moments from Dota 2's biggest stage.
+          <strong className="text-foreground">About this page:</strong> Explore all International editions, compare
+          winrates and match lengths across years, and see the heroes and players that defined the biggest stage in
+          Dota 2.
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Editions</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">{formatNumber(internationalLeagues.length)}</p>
+          </div>
+          <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Matches</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">{formatNumber(summary.totalMatches)}</p>
+          </div>
+          <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Avg Duration</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">{formatMinutes(summary.avgDuration)}</p>
+          </div>
         </div>
       </section>
 
       <section>
-        <h2 className="font-display text-xl font-semibold text-foreground">All The International Events</h2>
+        <h2 className="font-display text-xl font-semibold text-foreground">All The International Editions</h2>
+        <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+          Jump into each year&apos;s tournament page to see match timelines, team performance, and patch-specific
+          shifts that shaped the meta.
+        </p>
         <ul className="mt-4 list-disc space-y-1 pl-6 text-sm text-muted-foreground">
           {internationalLeagues.length ? (
             internationalLeagues.map((league) => (
@@ -373,6 +431,7 @@ export default async function InternationalPage() {
           ))}
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }

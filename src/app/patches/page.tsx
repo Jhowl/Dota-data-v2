@@ -9,6 +9,29 @@ export const metadata = {
   title: "Dota 2 Patches - Handicap Analysis by Patch",
   description:
     "Browse Dota 2 patches and analyze team handicap statistics for each patch version.",
+  keywords: [
+    "Dota 2 patches",
+    "Dota 2 patch notes",
+    "Dota 2 meta",
+    "Dota 2 handicap analysis",
+    "Dota 2 patch stats",
+  ],
+  openGraph: {
+    title: "Dota 2 Patches - Handicap Analysis by Patch",
+    description:
+      "Browse Dota 2 patches and analyze team handicap statistics for each patch version.",
+    type: "website",
+    url: "/patches",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Dota 2 Patches - Handicap Analysis by Patch",
+    description:
+      "Browse Dota 2 patches and analyze team handicap statistics for each patch version.",
+  },
+  alternates: {
+    canonical: "/patches",
+  },
 };
 
 export default async function PatchesPage() {

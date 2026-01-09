@@ -1,3 +1,5 @@
+import Script from "next/script";
+
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +31,28 @@ export async function generateMetadata({ params }: LeaguePageProps) {
   return {
     title: `${league.name} - Dota 2 League Statistics & Analysis`,
     description: `Complete statistics and analysis for ${league.name}. View match results, team performance, and detailed league insights.`,
+    keywords: [
+      "Dota 2 league",
+      "Dota 2 tournament",
+      "Dota 2 stats",
+      "Dota 2 matches",
+      "Dota 2 teams",
+      league.name,
+    ],
+    openGraph: {
+      title: `${league.name} - Dota 2 League Statistics & Analysis`,
+      description: `Complete statistics and analysis for ${league.name}. View match results, team performance, and detailed league insights.`,
+      type: "article",
+      url: `/leagues/${league.slug}`,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${league.name} - Dota 2 League Statistics & Analysis`,
+      description: `Complete statistics and analysis for ${league.name}. View match results, team performance, and detailed league insights.`,
+    },
+    alternates: {
+      canonical: `/leagues/${league.slug}`,
+    },
   };
 }
 
@@ -65,7 +89,24 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
   };
 
   return (
-    <div className="space-y-10">
+    <>
+      <Script id="league-ld-json" type="application/ld+json" strategy="afterInteractive">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "SportsEvent",
+          name: league.name,
+          sport: "Dota 2",
+          startDate: league.startDate ?? undefined,
+          endDate: league.endDate ?? undefined,
+          url: `https://dotadata.com/leagues/${league.slug}`,
+          organizer: {
+            "@type": "Organization",
+            name: "DotaData",
+            url: "https://dotadata.com",
+          },
+        })}
+      </Script>
+      <div className="space-y-10">
       <Breadcrumbs
         items={[
           { title: "Leagues", url: "/leagues" },
@@ -300,6 +341,7 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
           </Card>
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }

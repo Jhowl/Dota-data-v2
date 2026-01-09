@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Script from "next/script";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,31 @@ export const metadata = {
   title: "Dota 2 Leagues & Tournaments - Professional Esports Statistics",
   description:
     "Explore professional Dota 2 leagues and tournaments with match counts, teams, and detailed analysis.",
+  keywords: [
+    "Dota 2 leagues",
+    "Dota 2 tournaments",
+    "Dota 2 esports",
+    "Dota 2 stats",
+    "Dota 2 match analysis",
+    "Dota 2 teams",
+    "Dota 2 rankings",
+  ],
+  openGraph: {
+    title: "Dota 2 Leagues & Tournaments - Professional Esports Statistics",
+    description:
+      "Explore professional Dota 2 leagues and tournaments with match counts, teams, and detailed analysis.",
+    type: "website",
+    url: "/leagues",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Dota 2 Leagues & Tournaments - Professional Esports Statistics",
+    description:
+      "Explore professional Dota 2 leagues and tournaments with match counts, teams, and detailed analysis.",
+  },
+  alternates: {
+    canonical: "/leagues",
+  },
 };
 
 interface LeaguesPageProps {
@@ -32,7 +58,29 @@ export default async function LeaguesPage({ searchParams }: LeaguesPageProps) {
     : leagues;
 
   return (
-    <div className="space-y-10">
+    <>
+      <Script id="leagues-ld-json" type="application/ld+json" strategy="afterInteractive">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: "Dota 2 Leagues",
+          url: "https://dotadata.com/leagues",
+          about: {
+            "@type": "Thing",
+            name: "Dota 2 leagues and tournaments",
+          },
+          mainEntity: {
+            "@type": "ItemList",
+            itemListElement: filteredLeagues.slice(0, 50).map((league, index) => ({
+              "@type": "ListItem",
+              position: index + 1,
+              name: league.name,
+              url: `https://dotadata.com/leagues/${league.slug}`,
+            })),
+          },
+        })}
+      </Script>
+      <div className="space-y-10">
       <section className="space-y-4">
         <Badge className="w-fit bg-primary/10 text-primary">Leagues index</Badge>
         <h1 className="font-display text-3xl font-semibold md:text-4xl">Leagues</h1>
@@ -128,6 +176,7 @@ export default async function LeaguesPage({ searchParams }: LeaguesPageProps) {
           </table>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }

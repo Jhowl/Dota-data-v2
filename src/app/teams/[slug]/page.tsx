@@ -1,3 +1,5 @@
+import Script from "next/script";
+
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +31,28 @@ export async function generateMetadata({ params }: TeamPageProps) {
   return {
     title: `${team.name} - Dota 2 Team Statistics & Performance Analysis`,
     description: `Comprehensive statistics for ${team.name} with match history and performance analysis.`,
+    keywords: [
+      "Dota 2 team",
+      "Dota 2 roster",
+      "Dota 2 stats",
+      "Dota 2 match history",
+      "Dota 2 esports",
+      team.name,
+    ],
+    openGraph: {
+      title: `${team.name} - Dota 2 Team Statistics & Performance Analysis`,
+      description: `Comprehensive statistics for ${team.name} with match history and performance analysis.`,
+      type: "article",
+      url: `/teams/${team.slug}`,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${team.name} - Dota 2 Team Statistics & Performance Analysis`,
+      description: `Comprehensive statistics for ${team.name} with match history and performance analysis.`,
+    },
+    alternates: {
+      canonical: `/teams/${team.slug}`,
+    },
   };
 }
 
@@ -72,7 +96,23 @@ export default async function TeamPage({ params }: TeamPageProps) {
   };
 
   return (
-    <div className="space-y-10">
+    <>
+      <Script id="team-ld-json" type="application/ld+json" strategy="afterInteractive">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "SportsTeam",
+          name: team.name,
+          sport: "Dota 2",
+          url: `https://dotadata.com/teams/${team.slug}`,
+          logo: team.logoUrl ?? undefined,
+          memberOf: {
+            "@type": "Organization",
+            name: "DotaData",
+            url: "https://dotadata.com",
+          },
+        })}
+      </Script>
+      <div className="space-y-10">
       <Breadcrumbs
         items={[
           { title: "Teams", url: "/teams" },
@@ -313,6 +353,7 @@ export default async function TeamPage({ params }: TeamPageProps) {
           </Card>
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }

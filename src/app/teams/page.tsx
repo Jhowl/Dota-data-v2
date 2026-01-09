@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Script from "next/script";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,30 @@ export const metadata = {
   title: "Professional Dota 2 Teams - Statistics, Match History & Analysis",
   description:
     "Browse professional Dota 2 teams with match history and performance analysis. Find detailed team data and competitive insights.",
+  keywords: [
+    "Dota 2 teams",
+    "Dota 2 esports teams",
+    "Dota 2 team stats",
+    "Dota 2 match history",
+    "Dota 2 rosters",
+    "Dota 2 competitive",
+  ],
+  openGraph: {
+    title: "Professional Dota 2 Teams - Statistics, Match History & Analysis",
+    description:
+      "Browse professional Dota 2 teams with match history and performance analysis. Find detailed team data and competitive insights.",
+    type: "website",
+    url: "/teams",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Professional Dota 2 Teams - Statistics, Match History & Analysis",
+    description:
+      "Browse professional Dota 2 teams with match history and performance analysis. Find detailed team data and competitive insights.",
+  },
+  alternates: {
+    canonical: "/teams",
+  },
 };
 
 interface TeamsPageProps {
@@ -34,7 +59,29 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
     : teams;
 
   return (
-    <div className="space-y-10">
+    <>
+      <Script id="teams-ld-json" type="application/ld+json" strategy="afterInteractive">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: "Dota 2 Teams",
+          url: "https://dotadata.com/teams",
+          about: {
+            "@type": "Thing",
+            name: "Dota 2 esports teams",
+          },
+          mainEntity: {
+            "@type": "ItemList",
+            itemListElement: filteredTeams.slice(0, 50).map((team, index) => ({
+              "@type": "ListItem",
+              position: index + 1,
+              name: team.name,
+              url: `https://dotadata.com/teams/${team.slug}`,
+            })),
+          },
+        })}
+      </Script>
+      <div className="space-y-10">
       <section className="space-y-4">
         <Badge className="w-fit bg-primary/10 text-primary">Teams index</Badge>
         <h1 className="font-display text-3xl font-semibold md:text-4xl">Dota 2 Teams</h1>
@@ -148,6 +195,7 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
           </table>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }
