@@ -32,11 +32,33 @@ export const metadata: Metadata = {
   description:
     "DotaData is a competitive Dota 2 analytics hub highlighting league trends, team performance, and patch shifts.",
   metadataBase: new URL("https://dotadata.com"),
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32x32.png", type: "image/png", sizes: "32x32" },
+      { url: "/favicon-16x16.png", type: "image/png", sizes: "16x16" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
   openGraph: {
     title: "DotaData | Teams, Leagues, and Match Intelligence",
     description:
       "Track Dota 2 leagues, teams, and patch changes with clear stats and curated insights.",
     type: "website",
+    images: [
+      {
+        url: "/favicon.ico",
+        alt: "DotaData",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "DotaData | Teams, Leagues, and Match Intelligence",
+    description:
+      "Track Dota 2 leagues, teams, and patch changes with clear stats and curated insights.",
+    images: ["/favicon.ico"],
   },
   alternates: {
     canonical: "/",
