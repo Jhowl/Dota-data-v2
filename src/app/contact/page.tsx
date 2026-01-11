@@ -32,6 +32,8 @@ export const metadata = {
   },
 };
 
+export const revalidate = 86400;
+
 export default function ContactPage() {
   return (
     <div className="space-y-10">

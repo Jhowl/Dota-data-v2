@@ -38,6 +38,8 @@ export const metadata = {
   },
 };
 
+export const revalidate = 86400;
+
 interface TeamsPageProps {
   searchParams?: Promise<{ search?: string }>;
 }

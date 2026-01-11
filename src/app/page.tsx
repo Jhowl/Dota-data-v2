@@ -38,6 +38,8 @@ export const metadata = {
   },
 };
 
+export const revalidate = 86400;
+
 const formatMinutes = (seconds: number) => `${(seconds / 60).toFixed(1)}m`;
 
 export default async function HomePage() {

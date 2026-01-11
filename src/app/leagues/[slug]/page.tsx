@@ -56,6 +56,8 @@ export async function generateMetadata({ params }: LeaguePageProps) {
   };
 }
 
+export const revalidate = 86400;
+
 export default async function LeaguePage({ params }: LeaguePageProps) {
   const { slug } = await params;
   const league = await getLeagueBySlug(slug);

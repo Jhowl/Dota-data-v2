@@ -39,6 +39,8 @@ export const metadata = {
   },
 };
 
+export const revalidate = 86400;
+
 interface LeaguesPageProps {
   searchParams?: Promise<{ search?: string }>;
 }

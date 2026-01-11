@@ -43,6 +43,8 @@ export const metadata = {
   },
 };
 
+export const revalidate = 3600;
+
 const formatMinutes = (seconds: number) => `${(seconds / 60).toFixed(1)} min`;
 
 export default async function InternationalPage() {

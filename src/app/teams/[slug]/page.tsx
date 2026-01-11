@@ -56,6 +56,8 @@ export async function generateMetadata({ params }: TeamPageProps) {
   };
 }
 
+export const revalidate = 86400;
+
 export default async function TeamPage({ params }: TeamPageProps) {
   const { slug } = await params;
   const team = await getTeamBySlug(slug);

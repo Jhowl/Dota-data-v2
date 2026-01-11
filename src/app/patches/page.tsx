@@ -34,6 +34,8 @@ export const metadata = {
   },
 };
 
+export const revalidate = 86400;
+
 export default async function PatchesPage() {
   const [patches, matches] = await Promise.all([getPatches(), getRecentMatches(2000)]);
 
