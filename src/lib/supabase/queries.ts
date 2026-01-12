@@ -381,13 +381,14 @@ export async function getTopPerformersByLeague(leagueId: string): Promise<TopPer
     { key: "hero_healing", title: "Most Healing", field: "hero_healing" },
   ];
 
-  if (!supabase || !leagueId) {
+  const client = supabase;
+  if (!client || !leagueId) {
     return stats.map((stat) => ({ key: stat.key, title: stat.title, performer: null }));
   }
 
   const results = await Promise.all(
     stats.map(async (stat) => {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from("player_matches")
         .select(
           `match_id,hero_id,team_id,account_id,kills,deaths,assists,${stat.field},matches!inner(league_id)`
@@ -402,7 +403,8 @@ export async function getTopPerformersByLeague(leagueId: string): Promise<TopPer
         return { key: stat.key, title: stat.title, performer: null };
       }
 
-      const row = data[0] as Record<string, unknown>;
+      const rows = data as unknown as Array<Record<string, unknown>>;
+      const row = rows[0];
 
       return {
         key: stat.key,
@@ -437,13 +439,14 @@ export async function getTopPerformersByTeam(teamId: string): Promise<TopPerform
     { key: "hero_healing", title: "Most Healing", field: "hero_healing" },
   ];
 
-  if (!supabase || !teamId) {
+  const client = supabase;
+  if (!client || !teamId) {
     return stats.map((stat) => ({ key: stat.key, title: stat.title, performer: null }));
   }
 
   const results = await Promise.all(
     stats.map(async (stat) => {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from("player_matches")
         .select("match_id,hero_id,team_id,account_id,kills,deaths,assists," + stat.field)
         .eq("team_id", teamId)
@@ -456,7 +459,8 @@ export async function getTopPerformersByTeam(teamId: string): Promise<TopPerform
         return { key: stat.key, title: stat.title, performer: null };
       }
 
-      const row = data[0] as Record<string, unknown>;
+      const rows = data as unknown as Array<Record<string, unknown>>;
+      const row = rows[0];
 
       return {
         key: stat.key,
@@ -559,6 +563,9 @@ export async function getLeagueTeamParticipation(leagueId: string): Promise<Leag
         heroStats.set(teamId, new Map());
       }
       const teamHeroes = heroStats.get(teamId);
+      if (!teamHeroes) {
+        return;
+      }
       teamHeroes.set(heroId, (teamHeroes.get(heroId) ?? 0) + 1);
     });
 
@@ -602,13 +609,14 @@ export async function getTopPerformersByPatch(patchId: string): Promise<TopPerfo
     { key: "hero_healing", title: "Most Healing", field: "hero_healing" },
   ];
 
-  if (!supabase || !patchId) {
+  const client = supabase;
+  if (!client || !patchId) {
     return stats.map((stat) => ({ key: stat.key, title: stat.title, performer: null }));
   }
 
   const results = await Promise.all(
     stats.map(async (stat) => {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from("player_matches")
         .select(`match_id,hero_id,team_id,account_id,kills,deaths,assists,${stat.field},matches!inner(patch_id)`)
         .eq("matches.patch_id", patchId)
@@ -621,7 +629,8 @@ export async function getTopPerformersByPatch(patchId: string): Promise<TopPerfo
         return { key: stat.key, title: stat.title, performer: null };
       }
 
-      const row = data[0] as Record<string, unknown>;
+      const rows = data as unknown as Array<Record<string, unknown>>;
+      const row = rows[0];
 
       return {
         key: stat.key,
