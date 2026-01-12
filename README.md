@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DotaData Web
 
-## Getting Started
+Next.js frontend for dotadata.org.
 
-First, run the development server:
+## Local dev
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Production build (Docker)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+docker buildx build --platform linux/amd64 -t dotadata-web:latest \
+  --build-arg NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_URL \
+  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY \
+  -f Dockerfile . --load
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Deploy (example)
 
-## Learn More
+Build locally, export the image, upload, and run on a server with Docker.
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+# save
+docker save dotadata-web:latest -o dotadata-web.tar
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# upload (example)
+scp -i ~/.ssh/your_key dotadata-web.tar user@your.server:/tmp/dotadata-web.tar
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# load + run (example)
+ssh -i ~/.ssh/your_key user@your.server "docker load -i /tmp/dotadata-web.tar"
+ssh -i ~/.ssh/your_key user@your.server \
+  "docker rm -f dotadata-web || true && \
+   docker run -d --name dotadata-web --restart unless-stopped \
+   -p 3000:3000 \
+   -e N8N_CONTACT_WEBHOOK_URL=https://example.com/webhook/your-id \
+   dotadata-web:latest"
+```
 
-## Deploy on Vercel
+## Nginx (example)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Proxy to the container on port 3000.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+location / {
+  proxy_pass http://127.0.0.1:3000;
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+}
+```
+
+## Environment
+
+Build-time:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+Runtime:
+- `N8N_CONTACT_WEBHOOK_URL`
