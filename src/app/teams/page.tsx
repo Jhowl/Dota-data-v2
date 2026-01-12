@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
-import { getCounts, getTeamMatchStats, getTeams } from "@/lib/supabase/queries";
+import { getCounts, getTeamSummaries, getTeams } from "@/lib/supabase/queries";
 
 export const metadata = {
   title: "Professional Dota 2 Teams - Statistics, Match History & Analysis",
@@ -50,15 +50,17 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const query = resolvedSearchParams?.search?.toLowerCase().trim() ?? "";
 
-  const [counts, teams, teamStats] = await Promise.all([
+  const [counts, teams, teamSummaries] = await Promise.all([
     getCounts(),
     getTeams(),
-    getTeamMatchStats(),
+    getTeamSummaries(),
   ]);
 
   const filteredTeams = query
     ? teams.filter((team) => team.name.toLowerCase().includes(query))
     : teams;
+
+  const summaryByTeam = new Map(teamSummaries.map((summary) => [summary.teamId, summary]));
 
   return (
     <>
@@ -145,14 +147,11 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
             <tbody>
               {filteredTeams.length ? (
                 filteredTeams.map((team) => {
-                  const stats = teamStats[team.id];
-                  const totalMatches = stats?.totalMatches ?? 0;
-                  const avgDuration = totalMatches ? stats!.durationSum / totalMatches : 0;
-                  const avgScore = totalMatches ? stats!.scoreSum / totalMatches : 0;
-                  const radiantRate = stats?.radiantMatches
-                    ? (stats.radiantWins / stats.radiantMatches) * 100
-                    : null;
-                  const direRate = stats?.direMatches ? (stats.direWins / stats.direMatches) * 100 : null;
+                  const summary = summaryByTeam.get(team.id);
+                  const totalMatches = summary?.totalMatches ?? 0;
+                  const avgDuration = summary?.avgDuration ?? 0;
+                  const radiantRate = summary?.radiantWinrate ?? null;
+                  const direRate = summary?.direWinrate ?? null;
 
                   return (
                     <tr key={team.id} className="border-t border-border/60">
@@ -181,7 +180,7 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
                         {direRate !== null ? formatPercent(direRate) : "—"}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {stats?.lastMatch ? formatDate(stats.lastMatch) : "—"}
+                        {summary?.lastMatchTime ? formatDate(summary.lastMatchTime) : "—"}
                       </td>
                     </tr>
                   );

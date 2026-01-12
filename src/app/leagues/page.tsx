@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
-import { getCounts, getLeagueMatchStats, getLeagues } from "@/lib/supabase/queries";
+import { getCounts, getLeagueSummaries, getLeagues } from "@/lib/supabase/queries";
 
 export const metadata = {
   title: "Dota 2 Leagues & Tournaments - Professional Esports Statistics",
@@ -49,15 +49,17 @@ export default async function LeaguesPage({ searchParams }: LeaguesPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const query = resolvedSearchParams?.search?.toLowerCase().trim() ?? "";
 
-  const [counts, leagues, matchStats] = await Promise.all([
+  const [counts, leagues, leagueSummaries] = await Promise.all([
     getCounts(),
     getLeagues(),
-    getLeagueMatchStats(),
+    getLeagueSummaries(),
   ]);
 
   const filteredLeagues = query
     ? leagues.filter((league) => league.name.toLowerCase().includes(query))
     : leagues;
+
+  const summaryByLeague = new Map(leagueSummaries.map((summary) => [summary.leagueId, summary]));
 
   return (
     <>
@@ -145,10 +147,10 @@ export default async function LeaguesPage({ searchParams }: LeaguesPageProps) {
             <tbody>
               {filteredLeagues.length ? (
                 filteredLeagues.map((league) => {
-                  const stats = matchStats[league.id];
-                  const matchesCount = stats?.matches ?? 0;
-                  const teamCount = stats?.teams.size ?? 0;
-                  const radiantRate = matchesCount ? (stats!.radiantWins / matchesCount) * 100 : null;
+                  const summary = summaryByLeague.get(league.id);
+                  const matchesCount = summary?.totalMatches ?? 0;
+                  const teamCount = summary?.totalTeams ?? 0;
+                  const radiantRate = summary?.radiantWinrate ?? null;
                   return (
                     <tr key={league.id} className="border-t border-border/60">
                       <td className="px-4 py-3 font-semibold text-primary">

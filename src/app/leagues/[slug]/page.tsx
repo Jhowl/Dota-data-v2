@@ -4,12 +4,12 @@ import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
-import { summarizeMatches } from "@/lib/stats";
 import {
   getLeagueBySlug,
   getHeroes,
   getLeaguePickBanStats,
-  getMatchesByLeague,
+  getLeagueSummary,
+  getMatchesByIds,
   getTopPerformersByLeague,
   getTeams,
 } from "@/lib/supabase/queries";
@@ -66,18 +66,40 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
     return <div className="py-20 text-center text-muted-foreground">League not found.</div>;
   }
 
-  const [matches, teams, heroes, topPerformers, pickBanStats] = await Promise.all([
-    getMatchesByLeague(league.id, 500),
+  const [leagueSummary, teams, heroes, topPerformers, pickBanStats] = await Promise.all([
+    getLeagueSummary(league.id),
     getTeams(),
     getHeroes(),
     getTopPerformersByLeague(league.id),
     getLeaguePickBanStats(league.id, 5),
   ]);
 
+  const highlightMatchIds = [
+    leagueSummary?.minScoreMatchId,
+    leagueSummary?.maxScoreMatchId,
+    leagueSummary?.fastestMatchId,
+    leagueSummary?.longestMatchId,
+  ].filter(Boolean) as string[];
+
+  const highlightMatches = await getMatchesByIds([...new Set(highlightMatchIds)]);
+
   const teamLookup = new Map(teams.map((team) => [team.id, team.name]));
   const heroLookup = new Map(heroes.map((hero) => [hero.id, hero.localizedName]));
   const heroSlugLookup = new Map(heroes.map((hero) => [hero.id, hero.name.replace("npc_dota_hero_", "")]));
-  const summary = summarizeMatches(matches);
+  const matchById = new Map(highlightMatches.map((match) => [match.id, match]));
+  const summary = {
+    totalMatches: leagueSummary?.totalMatches ?? 0,
+    avgDuration: leagueSummary?.avgDuration ?? 0,
+    avgScore: leagueSummary?.avgScore ?? 0,
+    minScore: leagueSummary?.minScore ?? 0,
+    maxScore: leagueSummary?.maxScore ?? 0,
+    avgFirstTowerTime: leagueSummary?.avgFirstTowerTime ?? null,
+    radiantWinRate: leagueSummary?.radiantWinrate ?? 0,
+    fastestMatch: leagueSummary?.fastestMatchId ? matchById.get(leagueSummary.fastestMatchId) ?? null : null,
+    longestMatch: leagueSummary?.longestMatchId ? matchById.get(leagueSummary.longestMatchId) ?? null : null,
+    minScoreMatch: leagueSummary?.minScoreMatchId ? matchById.get(leagueSummary.minScoreMatchId) ?? null : null,
+    maxScoreMatch: leagueSummary?.maxScoreMatchId ? matchById.get(leagueSummary.maxScoreMatchId) ?? null : null,
+  };
   const direWinRate = summary.totalMatches ? 100 - summary.radiantWinRate : 0;
   const buildHeroImageUrl = (heroId?: string | null) => {
     if (!heroId) {

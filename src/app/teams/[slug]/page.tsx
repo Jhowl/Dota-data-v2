@@ -4,12 +4,12 @@ import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
-import { summarizeMatches } from "@/lib/stats";
 import {
   getHeroes,
-  getMatchesByTeam,
+  getMatchesByIds,
   getTeamBySlug,
   getTeamPickBanStats,
+  getTeamSummary,
   getTeams,
   getTopPerformersByTeam,
 } from "@/lib/supabase/queries";
@@ -66,26 +66,47 @@ export default async function TeamPage({ params }: TeamPageProps) {
     return <div className="py-20 text-center text-muted-foreground">Team not found.</div>;
   }
 
-  const [matches, teams, heroes, topPerformers, pickBanStats] = await Promise.all([
-    getMatchesByTeam(team.id, 500),
+  const [teamSummary, teams, heroes, topPerformers, pickBanStats] = await Promise.all([
+    getTeamSummary(team.id),
     getTeams(),
     getHeroes(),
     getTopPerformersByTeam(team.id),
     getTeamPickBanStats(team.id, 5),
   ]);
 
+  const highlightMatchIds = [
+    teamSummary?.minScoreMatchId,
+    teamSummary?.maxScoreMatchId,
+    teamSummary?.fastestMatchId,
+    teamSummary?.longestMatchId,
+  ].filter(Boolean) as string[];
+
+  const highlightMatches = await getMatchesByIds([...new Set(highlightMatchIds)]);
+
   const teamLookup = new Map(teams.map((entry) => [entry.id, entry.name]));
   const heroLookup = new Map(heroes.map((hero) => [hero.id, hero.localizedName]));
   const heroSlugLookup = new Map(heroes.map((hero) => [hero.id, hero.name.replace("npc_dota_hero_", "")]));
-  const summary = summarizeMatches(matches);
-  const radiantMatches = matches.filter((match) => match.radiantTeamId === team.id);
-  const direMatches = matches.filter((match) => match.direTeamId === team.id);
-  const radiantWins = radiantMatches.filter((match) => match.radiantWin).length;
-  const direWins = direMatches.filter((match) => !match.radiantWin).length;
-  const radiantWinRate = radiantMatches.length ? (radiantWins / radiantMatches.length) * 100 : 0;
-  const direWinRate = direMatches.length ? (direWins / direMatches.length) * 100 : 0;
-  const totalWins = radiantWins + direWins;
-  const overallWinRate = summary.totalMatches ? (totalWins / summary.totalMatches) * 100 : 0;
+  const matchById = new Map(highlightMatches.map((match) => [match.id, match]));
+  const summary = {
+    totalMatches: teamSummary?.totalMatches ?? 0,
+    avgDuration: teamSummary?.avgDuration ?? 0,
+    avgScore: teamSummary?.avgScore ?? 0,
+    minScore: teamSummary?.minScore ?? 0,
+    maxScore: teamSummary?.maxScore ?? 0,
+    avgFirstTowerTime: teamSummary?.avgFirstTowerTime ?? null,
+    fastestMatch: teamSummary?.fastestMatchId ? matchById.get(teamSummary.fastestMatchId) ?? null : null,
+    longestMatch: teamSummary?.longestMatchId ? matchById.get(teamSummary.longestMatchId) ?? null : null,
+    minScoreMatch: teamSummary?.minScoreMatchId ? matchById.get(teamSummary.minScoreMatchId) ?? null : null,
+    maxScoreMatch: teamSummary?.maxScoreMatchId ? matchById.get(teamSummary.maxScoreMatchId) ?? null : null,
+  };
+
+  const overallWinRate = summary.totalMatches
+    ? ((teamSummary?.radiantWinrate ?? 0) * (teamSummary?.radiantMatches ?? 0) +
+        (teamSummary?.direWinrate ?? 0) * (teamSummary?.direMatches ?? 0)) /
+        summary.totalMatches
+    : 0;
+  const radiantWinRate = teamSummary?.radiantWinrate ?? 0;
+  const direWinRate = teamSummary?.direWinrate ?? 0;
   const buildHeroImageUrl = (heroId?: string | null) => {
     if (!heroId) {
       return null;
