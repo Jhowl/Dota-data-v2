@@ -3,6 +3,7 @@ import Link from "next/link";
 const links = [
   { href: "/leagues", label: "Leagues" },
   { href: "/teams", label: "Teams" },
+  { href: "/seasons", label: "Seasons" },
   { href: "/the-international", label: "The International" },
   { href: "/patches", label: "Patches" },
   { href: "/contact", label: "Contact" },

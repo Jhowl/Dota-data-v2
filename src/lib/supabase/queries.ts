@@ -482,62 +482,85 @@ export async function getMatchesByIds(matchIds: string[]): Promise<Match[]> {
   return data.map((row) => mapMatch(row as Record<string, unknown>));
 }
 
+export async function getMatchesByYear(year: number): Promise<Match[]> {
+  if (!year) {
+    return [];
+  }
+
+  if (!supabase) {
+    return mockMatches.filter((match) => new Date(match.startTime).getFullYear() === year);
+  }
+
+  const start = new Date(Date.UTC(year, 0, 1, 0, 0, 0)).toISOString();
+  const end = new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0)).toISOString();
+
+  const results: Match[] = [];
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("matches")
+      .select("match_id,league_id,duration,start_time,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,first_tower_time,patch_id,picks_bans")
+      .gte("start_time", start)
+      .lt("start_time", end)
+      .order("start_time", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      break;
+    }
+
+    if (!data?.length) {
+      break;
+    }
+
+    results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
+    from += pageSize;
+  }
+
+  return results;
+}
+
 export async function getLeagueSummary(leagueId: string): Promise<LeagueSummary | null> {
   if (!supabase || !leagueId) {
     return null;
   }
-  const { data, error } = await supabase.from("league_summaries").select("*").eq("league_id", leagueId).maybeSingle();
-  if (error || !data) {
+  const { data, error } = await supabase
+    .from("league_snapshots")
+    .select("payload")
+    .eq("league_id", leagueId)
+    .maybeSingle();
+  if (error || !data?.payload) {
     return null;
   }
-  return {
-    leagueId: String(data.league_id ?? ""),
-    totalMatches: Number(data.total_matches ?? 0),
-    totalTeams: data.total_teams ?? null,
-    avgDuration: data.avg_duration != null ? Number(data.avg_duration) : null,
-    avgScore: data.avg_score != null ? Number(data.avg_score) : null,
-    radiantWinrate: data.radiant_winrate != null ? Number(data.radiant_winrate) : null,
-    avgFirstTowerTime: data.avg_first_tower_time != null ? Number(data.avg_first_tower_time) : null,
-    lastMatchTime: data.last_match_time ?? null,
-    minScore: data.min_score != null ? Number(data.min_score) : null,
-    maxScore: data.max_score != null ? Number(data.max_score) : null,
-    minScoreMatchId: data.min_score_match_id ? String(data.min_score_match_id) : null,
-    maxScoreMatchId: data.max_score_match_id ? String(data.max_score_match_id) : null,
-    fastestMatchId: data.fastest_match_id ? String(data.fastest_match_id) : null,
-    fastestMatchDuration: data.fastest_match_duration != null ? Number(data.fastest_match_duration) : null,
-    longestMatchId: data.longest_match_id ? String(data.longest_match_id) : null,
-    longestMatchDuration: data.longest_match_duration != null ? Number(data.longest_match_duration) : null,
-  };
+  return data.payload as LeagueSummary;
 }
 
 export async function getTeamSummary(teamId: string): Promise<TeamSummary | null> {
   if (!supabase || !teamId) {
     return null;
   }
-  const { data, error } = await supabase.from("team_summaries").select("*").eq("team_id", teamId).maybeSingle();
-  if (error || !data) {
+  const { data, error } = await supabase
+    .from("team_snapshots")
+    .select("payload")
+    .eq("team_id", teamId)
+    .maybeSingle();
+  if (error || !data?.payload) {
     return null;
   }
-  return {
-    teamId: String(data.team_id ?? ""),
-    totalMatches: Number(data.total_matches ?? 0),
-    avgDuration: data.avg_duration != null ? Number(data.avg_duration) : null,
-    avgScore: data.avg_score != null ? Number(data.avg_score) : null,
-    avgFirstTowerTime: data.avg_first_tower_time != null ? Number(data.avg_first_tower_time) : null,
-    radiantMatches: data.radiant_matches ?? null,
-    direMatches: data.dire_matches ?? null,
-    radiantWinrate: data.radiant_winrate != null ? Number(data.radiant_winrate) : null,
-    direWinrate: data.dire_winrate != null ? Number(data.dire_winrate) : null,
-    lastMatchTime: data.last_match_time ?? null,
-    minScore: data.min_score != null ? Number(data.min_score) : null,
-    maxScore: data.max_score != null ? Number(data.max_score) : null,
-    minScoreMatchId: data.min_score_match_id ? String(data.min_score_match_id) : null,
-    maxScoreMatchId: data.max_score_match_id ? String(data.max_score_match_id) : null,
-    fastestMatchId: data.fastest_match_id ? String(data.fastest_match_id) : null,
-    fastestMatchDuration: data.fastest_match_duration != null ? Number(data.fastest_match_duration) : null,
-    longestMatchId: data.longest_match_id ? String(data.longest_match_id) : null,
-    longestMatchDuration: data.longest_match_duration != null ? Number(data.longest_match_duration) : null,
-  };
+  return data.payload as TeamSummary;
+}
+
+export async function getSeasonSnapshot(year: number): Promise<SeasonSnapshot | null> {
+  if (!supabase || !year) {
+    return null;
+  }
+  const { data, error } = await supabase.from("season_snapshots").select("payload").eq("year", year).maybeSingle();
+  if (error || !data?.payload) {
+    return null;
+  }
+  return data.payload as SeasonSnapshot;
 }
 
 export type LeagueMatchStats = Record<string, { matches: number; teams: Set<string>; radiantWins: number }>;
@@ -580,6 +603,59 @@ export type TeamSummary = {
   fastestMatchDuration: number | null;
   longestMatchId: string | null;
   longestMatchDuration: number | null;
+};
+
+export type SeasonSnapshot = {
+  year: number;
+  totals: {
+    totalMatches: number;
+    avgDuration: number;
+    avgScore: number;
+    avgFirstTowerTime: number | null;
+    radiantWinRate: number;
+    minScore: number;
+    maxScore: number;
+    minScoreMatchId: string | null;
+    maxScoreMatchId: string | null;
+    fastestMatchId: string | null;
+    fastestMatchDuration: number | null;
+    longestMatchId: string | null;
+    longestMatchDuration: number | null;
+    lastMatchDate: string | null;
+  };
+  activeLeagues: number;
+  activeTeams: number;
+  monthlyDuration: Array<{ month: string; value: number }>;
+  monthlyScore: Array<{ month: string; value: number }>;
+  leagues: Array<{ id: string; name: string; slug: string; matchCount: number }>;
+  teams: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    matchCount: number;
+    radiantWinrate: number;
+    direWinrate: number;
+    overallWinrate: number;
+  }>;
+  pickBan: {
+    picked: Array<{ heroId: string; total: number }>;
+    banned: Array<{ heroId: string; total: number }>;
+    contested: Array<{ heroId: string; total: number }>;
+  };
+  topPerformers: Array<{
+    key: string;
+    title: string;
+    performer: {
+      matchId: string;
+      heroId: string | null;
+      teamId: string | null;
+      accountId: string | null;
+      statValue: number;
+      kills: number;
+      deaths: number;
+      assists: number;
+    } | null;
+  }>;
 };
 
 export type TeamMatchStats = Record<
@@ -814,29 +890,12 @@ export async function getLeagueSummaries(): Promise<LeagueSummary[]> {
     return [];
   }
 
-  const { data, error } = await supabase.from("league_summaries").select("*");
+  const { data, error } = await supabase.from("league_snapshots").select("payload");
   if (error || !data) {
     return [];
   }
 
-  return data.map((row) => ({
-    leagueId: String(row.league_id ?? ""),
-    totalMatches: Number(row.total_matches ?? 0),
-    totalTeams: row.total_teams ?? null,
-    avgDuration: row.avg_duration != null ? Number(row.avg_duration) : null,
-    avgScore: row.avg_score != null ? Number(row.avg_score) : null,
-    radiantWinrate: row.radiant_winrate != null ? Number(row.radiant_winrate) : null,
-    avgFirstTowerTime: row.avg_first_tower_time != null ? Number(row.avg_first_tower_time) : null,
-    lastMatchTime: row.last_match_time ?? null,
-    minScore: row.min_score != null ? Number(row.min_score) : null,
-    maxScore: row.max_score != null ? Number(row.max_score) : null,
-    minScoreMatchId: row.min_score_match_id ? String(row.min_score_match_id) : null,
-    maxScoreMatchId: row.max_score_match_id ? String(row.max_score_match_id) : null,
-    fastestMatchId: row.fastest_match_id ? String(row.fastest_match_id) : null,
-    fastestMatchDuration: row.fastest_match_duration != null ? Number(row.fastest_match_duration) : null,
-    longestMatchId: row.longest_match_id ? String(row.longest_match_id) : null,
-    longestMatchDuration: row.longest_match_duration != null ? Number(row.longest_match_duration) : null,
-  }));
+  return data.map((row) => row.payload as LeagueSummary).filter(Boolean);
 }
 
 export async function getTeamSummaries(): Promise<TeamSummary[]> {
@@ -844,31 +903,12 @@ export async function getTeamSummaries(): Promise<TeamSummary[]> {
     return [];
   }
 
-  const { data, error } = await supabase.from("team_summaries").select("*");
+  const { data, error } = await supabase.from("team_snapshots").select("payload");
   if (error || !data) {
     return [];
   }
 
-  return data.map((row) => ({
-    teamId: String(row.team_id ?? ""),
-    totalMatches: Number(row.total_matches ?? 0),
-    avgDuration: row.avg_duration != null ? Number(row.avg_duration) : null,
-    avgScore: row.avg_score != null ? Number(row.avg_score) : null,
-    avgFirstTowerTime: row.avg_first_tower_time != null ? Number(row.avg_first_tower_time) : null,
-    radiantMatches: row.radiant_matches ?? null,
-    direMatches: row.dire_matches ?? null,
-    radiantWinrate: row.radiant_winrate != null ? Number(row.radiant_winrate) : null,
-    direWinrate: row.dire_winrate != null ? Number(row.dire_winrate) : null,
-    lastMatchTime: row.last_match_time ?? null,
-    minScore: row.min_score != null ? Number(row.min_score) : null,
-    maxScore: row.max_score != null ? Number(row.max_score) : null,
-    minScoreMatchId: row.min_score_match_id ? String(row.min_score_match_id) : null,
-    maxScoreMatchId: row.max_score_match_id ? String(row.max_score_match_id) : null,
-    fastestMatchId: row.fastest_match_id ? String(row.fastest_match_id) : null,
-    fastestMatchDuration: row.fastest_match_duration != null ? Number(row.fastest_match_duration) : null,
-    longestMatchId: row.longest_match_id ? String(row.longest_match_id) : null,
-    longestMatchDuration: row.longest_match_duration != null ? Number(row.longest_match_duration) : null,
-  }));
+  return data.map((row) => row.payload as TeamSummary).filter(Boolean);
 }
 
 export async function getLeaguePickBanStats(leagueId: string, limit = 10): Promise<{

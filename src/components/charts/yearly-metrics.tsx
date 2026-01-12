@@ -1,0 +1,51 @@
+"use client";
+
+import {
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+interface YearlyMetricsPoint {
+  month: string;
+  avgDuration: number;
+  avgScore: number;
+}
+
+interface YearlyMetricsProps {
+  data: YearlyMetricsPoint[];
+}
+
+export function YearlyMetrics({ data }: YearlyMetricsProps) {
+  return (
+    <div className="h-[320px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ left: 8, right: 8, top: 8 }}>
+          <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+          <YAxis yAxisId="left" tick={{ fontSize: 12 }} allowDecimals={false} />
+          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} allowDecimals={false} />
+          <Tooltip contentStyle={{ borderRadius: 12, borderColor: "rgba(0,0,0,0.08)" }} />
+          <Line
+            yAxisId="left"
+            type="monotone"
+            dataKey="avgDuration"
+            stroke="var(--chart-2)"
+            strokeWidth={2}
+            dot={{ r: 3 }}
+          />
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="avgScore"
+            stroke="var(--chart-3)"
+            strokeWidth={2}
+            dot={{ r: 3 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}

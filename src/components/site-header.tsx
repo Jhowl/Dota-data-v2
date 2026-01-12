@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 const navItems = [
   { href: "/leagues", label: "Leagues" },
   { href: "/teams", label: "Teams" },
+  { href: "/seasons", label: "Seasons" },
   { href: "/the-international", label: "The International" },
   { href: "/patches", label: "Patches" },
   { href: "/contact", label: "Contact" },
