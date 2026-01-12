@@ -225,10 +225,16 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
                   <p>Duration: {formatMinutes(summary.fastestMatch.duration)}</p>
                   <p>Match ID: {summary.fastestMatch.id}</p>
                   <p>
-                    Radiant: {summary.fastestMatch.radiantTeamId ? teamLookup.get(summary.fastestMatch.radiantTeamId) : "Unknown"}
+                    Radiant:{" "}
+                    {summary.fastestMatch.radiantTeamId
+                      ? teamLookup.get(summary.fastestMatch.radiantTeamId)?.name ?? "Unknown"
+                      : "Unknown"}
                   </p>
                   <p>
-                    Dire: {summary.fastestMatch.direTeamId ? teamLookup.get(summary.fastestMatch.direTeamId) : "Unknown"}
+                    Dire:{" "}
+                    {summary.fastestMatch.direTeamId
+                      ? teamLookup.get(summary.fastestMatch.direTeamId)?.name ?? "Unknown"
+                      : "Unknown"}
                   </p>
                   <p>Winner: {summary.fastestMatch.radiantWin ? "Radiant" : "Dire"}</p>
                 </CardContent>
@@ -243,10 +249,16 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
                   <p>Duration: {formatMinutes(summary.longestMatch.duration)}</p>
                   <p>Match ID: {summary.longestMatch.id}</p>
                   <p>
-                    Radiant: {summary.longestMatch.radiantTeamId ? teamLookup.get(summary.longestMatch.radiantTeamId) : "Unknown"}
+                    Radiant:{" "}
+                    {summary.longestMatch.radiantTeamId
+                      ? teamLookup.get(summary.longestMatch.radiantTeamId)?.name ?? "Unknown"
+                      : "Unknown"}
                   </p>
                   <p>
-                    Dire: {summary.longestMatch.direTeamId ? teamLookup.get(summary.longestMatch.direTeamId) : "Unknown"}
+                    Dire:{" "}
+                    {summary.longestMatch.direTeamId
+                      ? teamLookup.get(summary.longestMatch.direTeamId)?.name ?? "Unknown"
+                      : "Unknown"}
                   </p>
                   <p>Winner: {summary.longestMatch.radiantWin ? "Radiant" : "Dire"}</p>
                 </CardContent>

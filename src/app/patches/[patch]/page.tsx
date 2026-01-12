@@ -133,6 +133,9 @@ export default async function PatchPage({ params }: PatchPageProps) {
         acc.set(dateKey, { totalDuration: 0, count: 0 });
       }
       const entry = acc.get(dateKey);
+      if (!entry) {
+        return acc;
+      }
       entry.totalDuration += Number(match.duration ?? 0);
       entry.count += 1;
       return acc;
@@ -180,7 +183,7 @@ export default async function PatchPage({ params }: PatchPageProps) {
         radiantWinrate: Number(radiantRate.toFixed(1)),
       };
     })
-    .filter(Boolean)
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
     .sort((a, b) => b.matchCount - a.matchCount);
 
   const teamStats = new Map<
@@ -209,6 +212,9 @@ export default async function PatchPage({ params }: PatchPageProps) {
         });
       }
       const entry = teamStats.get(teamId);
+      if (!entry) {
+        return;
+      }
       entry.matchCount += 1;
       if (isRadiant) {
         entry.radiantMatches += 1;
@@ -248,12 +254,15 @@ export default async function PatchPage({ params }: PatchPageProps) {
         direWinrate: Number(direRate.toFixed(1)),
       };
     })
-    .filter(Boolean)
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
     .sort((a, b) => b.matchCount - a.matchCount)
     .slice(0, 12);
 
-  const pickBanBuckets = matches.reduce(
-    (acc, match) => {
+  const pickBanBuckets = matches.reduce<{
+    picked: Record<string, number>;
+    banned: Record<string, number>;
+    contested: Record<string, number>;
+  }>((acc, match) => {
       const entries = Array.isArray(match.picksBans) ? match.picksBans : [];
       entries.forEach((entry) => {
         const heroId = String(entry.hero_id ?? "");
@@ -268,9 +277,11 @@ export default async function PatchPage({ params }: PatchPageProps) {
         acc.contested[heroId] = (acc.contested[heroId] ?? 0) + 1;
       });
       return acc;
-    },
-    { picked: {}, banned: {}, contested: {} }
-  );
+    }, {
+      picked: {},
+      banned: {},
+      contested: {},
+    });
 
   const toTopHeroes = (bucket: Record<string, number>, limit = 5) =>
     Object.entries(bucket)
@@ -367,7 +378,7 @@ export default async function PatchPage({ params }: PatchPageProps) {
             <CardTitle>Avg Duration by Day</CardTitle>
           </CardHeader>
           <CardContent>
-            <YearlyMetricLine data={durationByDay} />
+            <YearlyMetricLine data={durationByDay} color="#54d2b4" />
           </CardContent>
         </Card>
       </section>

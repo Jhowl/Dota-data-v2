@@ -137,6 +137,9 @@ export default async function TeamHandicapPage({ params }: TeamHandicapPageProps
         leagueStats.set(leagueId, createStats(handicapRange));
       }
       const stats = leagueStats.get(leagueId);
+      if (!stats) {
+        return;
+      }
       stats.totalMatches += 1;
       if (teamWon) {
         stats.wins += 1;
@@ -153,6 +156,9 @@ export default async function TeamHandicapPage({ params }: TeamHandicapPageProps
         patchStats.set(patchId, createStats(handicapRange));
       }
       const stats = patchStats.get(patchId);
+      if (!stats) {
+        return;
+      }
       stats.totalMatches += 1;
       if (teamWon) {
         stats.wins += 1;

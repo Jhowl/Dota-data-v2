@@ -105,6 +105,7 @@ export const matches: Match[] = [
     direTeamId: "8599101",
     firstTowerTeamId: "1838315",
     firstTowerTime: 418,
+    picksBans: null,
     patchId: "1",
   },
   {
@@ -121,6 +122,7 @@ export const matches: Match[] = [
     direTeamId: "15",
     firstTowerTeamId: "15",
     firstTowerTime: 522,
+    picksBans: null,
     patchId: "1",
   },
   {
@@ -137,6 +139,7 @@ export const matches: Match[] = [
     direTeamId: "716117",
     firstTowerTeamId: "8599101",
     firstTowerTime: 380,
+    picksBans: null,
     patchId: "2",
   },
   {
@@ -153,6 +156,7 @@ export const matches: Match[] = [
     direTeamId: "1838315",
     firstTowerTeamId: "1838315",
     firstTowerTime: 472,
+    picksBans: null,
     patchId: "3",
   },
 ];
