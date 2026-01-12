@@ -3,6 +3,7 @@ import Script from "next/script";
 
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { createHeroImageResolver } from "@/lib/hero";
@@ -138,12 +139,19 @@ export default async function TeamPage({ params }: TeamPageProps) {
 
       <section className="space-y-3">
         <Badge className="w-fit bg-primary/10 text-primary">Team overview</Badge>
-        <h1 className="font-display text-3xl font-semibold md:text-4xl">{team.name}</h1>
-        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-          <span>Team ID: {team.id}</span>
-          {team.logoUrl ? (
-            <img src={team.logoUrl} alt={`${team.name} logo`} className="h-10 w-10 rounded-full" />
-          ) : null}
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="font-display text-3xl font-semibold md:text-4xl">{team.name}</h1>
+            <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+              <span>Team ID: {team.id}</span>
+              {team.logoUrl ? (
+                <img src={team.logoUrl} alt={`${team.name} logo`} className="h-10 w-10 rounded-full" />
+              ) : null}
+            </div>
+          </div>
+          <Button asChild variant="outline">
+            <Link href={`/teams/${team.slug}/handicap`}>Handicap Analysis</Link>
+          </Button>
         </div>
       </section>
 

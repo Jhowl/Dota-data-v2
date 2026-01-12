@@ -565,6 +565,44 @@ export async function getMatchesByTeam(teamId: string, limit = 10): Promise<Matc
   return data.map((row) => mapMatch(row as Record<string, unknown>));
 }
 
+export async function getMatchesByTeamForHandicap(teamId: string): Promise<Match[]> {
+  if (!teamId) {
+    return [];
+  }
+
+  if (!supabase) {
+    return mockMatches.filter((match) => match.radiantTeamId === teamId || match.direTeamId === teamId);
+  }
+
+  const results: Match[] = [];
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("matches")
+      .select(
+        "match_id,league_id,radiant_team_id,dire_team_id,radiant_score,dire_score,radiant_win,patch_id"
+      )
+      .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`)
+      .order("match_id", { ascending: false })
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      break;
+    }
+
+    if (!data?.length) {
+      break;
+    }
+
+    results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
+    from += pageSize;
+  }
+
+  return results;
+}
+
 export async function getMatchesByLeagueIds(leagueIds: string[]): Promise<Match[]> {
   if (!leagueIds.length) {
     return [];
