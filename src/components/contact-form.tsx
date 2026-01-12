@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-const WEBHOOK_URL = "https://n8n.jhowl.com/webhook/2a55d28f-0635-46b5-878b-0b64f388d363";
 
 type FormState = "idle" | "submitting" | "success" | "error";
 
@@ -65,7 +64,7 @@ export function ContactForm() {
 
     try {
       setState("submitting");
-      const response = await fetch(WEBHOOK_URL, {
+      const response = await fetch("/api/contact", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -75,22 +74,24 @@ export function ContactForm() {
           email,
           subject,
           message,
-          source: "dotadata-contact",
-          submittedAt: new Date().toISOString(),
-          userAgent: navigator.userAgent,
+          submittedAt: startedAt,
+          company: honeypot,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Request failed");
+        const responseBody = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(responseBody?.error ?? "Request failed");
       }
 
       form.reset();
       startedAtRef.current = Date.now();
       setState("success");
-    } catch {
+    } catch (submitError) {
       setState("error");
-      setError("We could not send your message right now. Please try again.");
+      setError(
+        submitError instanceof Error ? submitError.message : "We could not send your message right now. Please try again."
+      );
     } finally {
       setTimeout(() => setState("idle"), 4000);
     }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Script from "next/script";
 
 import { Breadcrumbs } from "@/components/breadcrumbs";
@@ -9,6 +10,7 @@ import {
   getLeagueBySlug,
   getHeroes,
   getLeaguePickBanStats,
+  getLeagueTeamParticipation,
   getLeagueSummary,
   getMatchesByIds,
   getTopPerformersByLeague,
@@ -67,12 +69,13 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
     return <div className="py-20 text-center text-muted-foreground">League not found.</div>;
   }
 
-  const [leagueSummary, teams, heroes, topPerformers, pickBanStats] = await Promise.all([
+  const [leagueSummary, teams, heroes, topPerformers, pickBanStats, teamParticipation] = await Promise.all([
     getLeagueSummary(league.id),
     getTeams(),
     getHeroes(),
     getTopPerformersByLeague(league.id),
     getLeaguePickBanStats(league.id, 5),
+    getLeagueTeamParticipation(league.id),
   ]);
 
   const highlightMatchIds = [
@@ -84,7 +87,7 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
 
   const highlightMatches = await getMatchesByIds([...new Set(highlightMatchIds)]);
 
-  const teamLookup = new Map(teams.map((team) => [team.id, team.name]));
+  const teamLookup = new Map(teams.map((team) => [team.id, team]));
   const heroLookup = new Map(heroes.map((hero) => [hero.id, hero.localizedName]));
   const matchById = new Map(highlightMatches.map((match) => [match.id, match]));
   const summary = {
@@ -280,7 +283,6 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
                           </div>
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-foreground">{heroName}</p>
-                            <p className="text-xs text-muted-foreground">Team {entry.team === 0 ? "Radiant" : "Dire"}</p>
                           </div>
                           <div className="text-sm font-semibold text-primary">{formatNumber(entry.total)}</div>
                         </div>
@@ -313,7 +315,7 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
 
                     const performer = entry.performer;
                     const heroName = performer.heroId ? heroLookup.get(performer.heroId) ?? performer.heroId : "Unknown";
-                    const teamName = performer.teamId ? teamLookup.get(performer.teamId) ?? performer.teamId : "Unknown";
+                    const teamName = performer.teamId ? teamLookup.get(performer.teamId)?.name ?? performer.teamId : "Unknown";
                     const heroImage = buildHeroImageUrl(performer.heroId);
 
                     return (
@@ -351,6 +353,77 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No player match data available yet.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60 bg-card/80">
+            <CardHeader>
+              <CardTitle>Team Participation</CardTitle>
+              <p className="text-sm text-muted-foreground">Win rate and most picked hero per team in this league.</p>
+            </CardHeader>
+            <CardContent>
+              {teamParticipation.length ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border border-border/60 text-sm">
+                    <thead className="bg-muted/60">
+                      <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="px-4 py-3">Team</th>
+                        <th className="px-4 py-3">Matches</th>
+                        <th className="px-4 py-3">Winrate</th>
+                        <th className="px-4 py-3">Most Picked Hero</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {teamParticipation.map((entry) => {
+                        const team = teamLookup.get(entry.teamId);
+                        const heroName = entry.mostPickedHeroId
+                          ? heroLookup.get(entry.mostPickedHeroId) ?? entry.mostPickedHeroId
+                          : null;
+                        const heroImage = buildHeroImageUrl(entry.mostPickedHeroId);
+                        return (
+                          <tr key={entry.teamId} className="border-t border-border/60">
+                            <td className="px-4 py-3 font-semibold text-primary">
+                              {team ? (
+                                <Link href={`/teams/${team.slug}`}>{team.name}</Link>
+                              ) : (
+                                <span>{entry.teamId}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">{formatNumber(entry.matchCount)}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{formatPercent(entry.winrate)}</td>
+                            <td className="px-4 py-3 text-muted-foreground">
+                              {heroName ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="h-8 w-8 overflow-hidden rounded-md border border-border/60 bg-muted">
+                                    {heroImage ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img src={heroImage} alt={heroName} className="h-full w-full object-cover" />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
+                                        N/A
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-semibold text-foreground">{heroName}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {formatNumber(entry.mostPickedTotal)} picks
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No team participation data available yet.</p>
               )}
             </CardContent>
           </Card>

@@ -359,6 +359,15 @@ export type TopPerformerStat = {
   performer: TopPerformer | null;
 };
 
+export type LeagueTeamParticipation = {
+  teamId: string;
+  matchCount: number;
+  wins: number;
+  winrate: number;
+  mostPickedHeroId: string | null;
+  mostPickedTotal: number;
+};
+
 export async function getTopPerformersByLeague(leagueId: string): Promise<TopPerformerStat[]> {
   const stats = [
     { key: "kills", title: "Most Kills", field: "kills" },
@@ -467,6 +476,117 @@ export async function getTopPerformersByTeam(teamId: string): Promise<TopPerform
   );
 
   return results;
+}
+
+export async function getLeagueTeamParticipation(leagueId: string): Promise<LeagueTeamParticipation[]> {
+  if (!supabase || !leagueId) {
+    return [];
+  }
+
+  const pageSize = 1000;
+  let from = 0;
+  const matchRows: Array<Record<string, unknown>> = [];
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("matches")
+      .select("radiant_team_id,dire_team_id,radiant_win")
+      .eq("league_id", leagueId)
+      .order("match_id", { ascending: false })
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      break;
+    }
+    if (!data?.length) {
+      break;
+    }
+    matchRows.push(...data);
+    from += pageSize;
+  }
+
+  const teamStats = new Map<string, { matches: number; wins: number }>();
+
+  matchRows.forEach((match) => {
+    const radiantId = match.radiant_team_id ? String(match.radiant_team_id) : null;
+    const direId = match.dire_team_id ? String(match.dire_team_id) : null;
+    const radiantWin = Boolean(match.radiant_win);
+
+    if (radiantId) {
+      const stats = teamStats.get(radiantId) ?? { matches: 0, wins: 0 };
+      stats.matches += 1;
+      if (radiantWin) {
+        stats.wins += 1;
+      }
+      teamStats.set(radiantId, stats);
+    }
+
+    if (direId) {
+      const stats = teamStats.get(direId) ?? { matches: 0, wins: 0 };
+      stats.matches += 1;
+      if (!radiantWin) {
+        stats.wins += 1;
+      }
+      teamStats.set(direId, stats);
+    }
+  });
+
+  const heroStats = new Map<string, Map<string, number>>();
+  let heroFrom = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("player_matches")
+      .select("id,team_id,hero_id,matches!inner(league_id)")
+      .eq("matches.league_id", leagueId)
+      .order("id", { ascending: true })
+      .range(heroFrom, heroFrom + pageSize - 1);
+
+    if (error) {
+      break;
+    }
+    if (!data?.length) {
+      break;
+    }
+
+    data.forEach((row) => {
+      const teamId = row.team_id ? String(row.team_id) : null;
+      const heroId = row.hero_id ? String(row.hero_id) : null;
+      if (!teamId || !heroId) {
+        return;
+      }
+      if (!heroStats.has(teamId)) {
+        heroStats.set(teamId, new Map());
+      }
+      const teamHeroes = heroStats.get(teamId);
+      teamHeroes.set(heroId, (teamHeroes.get(heroId) ?? 0) + 1);
+    });
+
+    heroFrom += pageSize;
+  }
+
+  const participation: LeagueTeamParticipation[] = Array.from(teamStats.entries()).map(([teamId, stats]) => {
+    const heroes = heroStats.get(teamId) ?? new Map();
+    let topHeroId: string | null = null;
+    let topHeroCount = 0;
+    heroes.forEach((count, heroId) => {
+      if (count > topHeroCount) {
+        topHeroCount = count;
+        topHeroId = heroId;
+      }
+    });
+
+    return {
+      teamId,
+      matchCount: stats.matches,
+      wins: stats.wins,
+      winrate: stats.matches ? Number(((stats.wins / stats.matches) * 100).toFixed(1)) : 0,
+      mostPickedHeroId: topHeroId,
+      mostPickedTotal: topHeroCount,
+    };
+  });
+
+  return participation.sort((a, b) => b.matchCount - a.matchCount);
 }
 
 export async function getTopPerformersByPatch(patchId: string): Promise<TopPerformerStat[]> {
@@ -1102,20 +1222,20 @@ export async function getLeaguePickBanStats(leagueId: string, limit = 10): Promi
   mostBanned: PickBanStat[];
   mostContested: PickBanStat[];
 }> {
-  const mostPicked: PickBanBuckets = {};
-  const mostBanned: PickBanBuckets = {};
-  const mostContested: PickBanBuckets = {};
+  const mostPicked: Record<string, { heroId: string; team: number | null; total: number }> = {};
+  const mostBanned: Record<string, { heroId: string; team: number | null; total: number }> = {};
+  const mostContested: Record<string, { heroId: string; team: number | null; total: number }> = {};
 
   const accumulate = (rows: Array<Record<string, unknown>>) => {
     rows.forEach((row) => {
       const entries = parsePickBans(row.picks_bans);
       entries.forEach((entry) => {
         if (entry.is_pick) {
-          incrementBucket(mostPicked, entry);
+          incrementBucketByHero(mostPicked, entry);
         } else {
-          incrementBucket(mostBanned, entry);
+          incrementBucketByHero(mostBanned, entry);
         }
-        incrementBucket(mostContested, entry);
+        incrementBucketByHero(mostContested, entry);
       });
     });
   };

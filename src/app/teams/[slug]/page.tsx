@@ -274,49 +274,6 @@ export default async function TeamPage({ params }: TeamPageProps) {
             ) : null}
           </section>
 
-          <Card className="border-border/60 bg-card/80">
-            <CardHeader>
-              <CardTitle>League Participation</CardTitle>
-              <p className="text-sm text-muted-foreground">Performance across leagues this team competed in.</p>
-            </CardHeader>
-            <CardContent>
-              {teamLeagues.length ? (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full border border-border/60 text-sm">
-                    <thead className="bg-muted/60">
-                      <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                        <th className="px-4 py-3">League</th>
-                        <th className="px-4 py-3">Matches</th>
-                        <th className="px-4 py-3">Overall</th>
-                        <th className="px-4 py-3">Radiant</th>
-                        <th className="px-4 py-3">Dire</th>
-                        <th className="px-4 py-3">Last Match</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {teamLeagues.map((league) => (
-                        <tr key={league.id} className="border-t border-border/60">
-                          <td className="px-4 py-3 font-semibold text-primary">
-                            <Link href={`/leagues/${league.slug}`}>{league.name}</Link>
-                          </td>
-                          <td className="px-4 py-3 text-muted-foreground">{formatNumber(league.matchCount)}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{formatPercent(league.overallWinrate)}</td>
-                          <td className="px-4 py-3 text-emerald-200">{formatPercent(league.radiantWinrate)}</td>
-                          <td className="px-4 py-3 text-red-200">{formatPercent(league.direWinrate)}</td>
-                          <td className="px-4 py-3 text-muted-foreground">
-                            {league.lastMatchTime ? formatDate(league.lastMatchTime) : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No league participation data yet.</p>
-              )}
-            </CardContent>
-          </Card>
-
           <section className="grid gap-6 lg:grid-cols-3">
             {[
               { title: "Most Picked", entries: pickBanStats.mostPicked },
@@ -415,6 +372,49 @@ export default async function TeamPage({ params }: TeamPageProps) {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No player match data available yet.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60 bg-card/80">
+            <CardHeader>
+              <CardTitle>League Participation</CardTitle>
+              <p className="text-sm text-muted-foreground">Performance across leagues this team competed in.</p>
+            </CardHeader>
+            <CardContent>
+              {teamLeagues.length ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border border-border/60 text-sm">
+                    <thead className="bg-muted/60">
+                      <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="px-4 py-3">League</th>
+                        <th className="px-4 py-3">Matches</th>
+                        <th className="px-4 py-3">Overall</th>
+                        <th className="px-4 py-3">Radiant</th>
+                        <th className="px-4 py-3">Dire</th>
+                        <th className="px-4 py-3">Last Match</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {teamLeagues.map((league) => (
+                        <tr key={league.id} className="border-t border-border/60">
+                          <td className="px-4 py-3 font-semibold text-primary">
+                            <Link href={`/leagues/${league.slug}`}>{league.name}</Link>
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">{formatNumber(league.matchCount)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{formatPercent(league.overallWinrate)}</td>
+                          <td className="px-4 py-3 text-emerald-200">{formatPercent(league.radiantWinrate)}</td>
+                          <td className="px-4 py-3 text-red-200">{formatPercent(league.direWinrate)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {league.lastMatchTime ? formatDate(league.lastMatchTime) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No league participation data yet.</p>
               )}
             </CardContent>
           </Card>
