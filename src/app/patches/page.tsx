@@ -1,9 +1,11 @@
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatNumber } from "@/lib/format";
-import { getPatches, getRecentMatches } from "@/lib/supabase/queries";
+import { getPatchesWithCounts } from "@/lib/supabase/queries";
 
 export const metadata = {
   title: "Dota 2 Patches - Handicap Analysis by Patch",
@@ -37,14 +39,33 @@ export const metadata = {
 export const revalidate = 86400;
 
 export default async function PatchesPage() {
-  const [patches, matches] = await Promise.all([getPatches(), getRecentMatches(2000)]);
+  const patches = await getPatchesWithCounts();
+  const totalMatches = patches.reduce((sum, patch) => sum + patch.matchCount, 0);
 
-  const matchesByPatch = matches.reduce<Record<string, number>>((acc, match) => {
-    acc[match.patchId] = (acc[match.patchId] ?? 0) + 1;
-    return acc;
-  }, {});
+  const parsePatchVersion = (value: string) => {
+    const match = /^(\d+)\.(\d+)([a-z])?$/i.exec(value.trim());
+    if (!match) {
+      return { major: 0, minor: 0, suffix: "" };
+    }
+    return {
+      major: Number(match[1]),
+      minor: Number(match[2]),
+      suffix: match[3] ?? "",
+    };
+  };
 
-  const totalMatches = Object.values(matchesByPatch).reduce((sum, count) => sum + count, 0);
+  const sortedPatches = [...patches].sort((a, b) => {
+    const left = parsePatchVersion(a.patch);
+    const right = parsePatchVersion(b.patch);
+    if (left.major !== right.major) {
+      return right.major - left.major;
+    }
+    if (left.minor !== right.minor) {
+      return right.minor - left.minor;
+    }
+    return right.suffix.localeCompare(left.suffix);
+  });
+  const latestPatch = sortedPatches[0];
 
   return (
     <div className="space-y-10">
@@ -74,7 +95,7 @@ export default async function PatchesPage() {
         <Card className="border-border/60 bg-card/80">
           <CardContent className="p-6">
             <p className="text-sm text-muted-foreground">Latest Patch</p>
-            <p className="text-2xl font-semibold text-foreground">{patches[0]?.patch ?? "N/A"}</p>
+            <p className="text-2xl font-semibold text-foreground">{latestPatch?.patch ?? "N/A"}</p>
           </CardContent>
         </Card>
       </section>
@@ -97,8 +118,8 @@ export default async function PatchesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {patches.map((patch) => {
-                    const matchCount = matchesByPatch[patch.id] ?? 0;
+                  {sortedPatches.map((patch) => {
+                    const matchCount = patch.matchCount ?? 0;
                     return (
                       <tr key={patch.id} className="border-t border-border/60">
                         <td className="px-4 py-3 font-semibold text-foreground">Patch {patch.patch}</td>
@@ -106,8 +127,8 @@ export default async function PatchesPage() {
                         <td className="px-4 py-3 text-muted-foreground">N/A</td>
                         <td className="px-4 py-3">
                           {matchCount > 0 ? (
-                            <Button size="sm" variant="outline" disabled>
-                              Handicap Analysis
+                            <Button size="sm" variant="outline" asChild>
+                              <Link href={`/patches/${encodeURIComponent(patch.patch)}`}>View Patch</Link>
                             </Button>
                           ) : (
                             <span className="text-xs text-muted-foreground">No matches</span>

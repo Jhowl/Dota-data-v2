@@ -1,9 +1,11 @@
+import Link from "next/link";
 import Script from "next/script";
 
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
+import { createHeroImageResolver } from "@/lib/hero";
 import {
   getHeroes,
   getMatchesByIds,
@@ -85,7 +87,6 @@ export default async function TeamPage({ params }: TeamPageProps) {
 
   const teamLookup = new Map(teams.map((entry) => [entry.id, entry.name]));
   const heroLookup = new Map(heroes.map((hero) => [hero.id, hero.localizedName]));
-  const heroSlugLookup = new Map(heroes.map((hero) => [hero.id, hero.name.replace("npc_dota_hero_", "")]));
   const matchById = new Map(highlightMatches.map((match) => [match.id, match]));
   const summary = {
     totalMatches: teamSummary?.totalMatches ?? 0,
@@ -99,6 +100,7 @@ export default async function TeamPage({ params }: TeamPageProps) {
     minScoreMatch: teamSummary?.minScoreMatchId ? matchById.get(teamSummary.minScoreMatchId) ?? null : null,
     maxScoreMatch: teamSummary?.maxScoreMatchId ? matchById.get(teamSummary.maxScoreMatchId) ?? null : null,
   };
+  const teamLeagues = teamSummary?.leagues ?? [];
 
   const overallWinRate = summary.totalMatches
     ? ((teamSummary?.radiantWinrate ?? 0) * (teamSummary?.radiantMatches ?? 0) +
@@ -107,16 +109,7 @@ export default async function TeamPage({ params }: TeamPageProps) {
     : 0;
   const radiantWinRate = teamSummary?.radiantWinrate ?? 0;
   const direWinRate = teamSummary?.direWinrate ?? 0;
-  const buildHeroImageUrl = (heroId?: string | null) => {
-    if (!heroId) {
-      return null;
-    }
-    const heroSlug = heroSlugLookup.get(heroId);
-    if (!heroSlug) {
-      return null;
-    }
-    return `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${heroSlug}_sb.png`;
-  };
+  const buildHeroImageUrl = createHeroImageResolver(heroes);
 
   return (
     <>
@@ -272,6 +265,49 @@ export default async function TeamPage({ params }: TeamPageProps) {
               </Card>
             ) : null}
           </section>
+
+          <Card className="border-border/60 bg-card/80">
+            <CardHeader>
+              <CardTitle>League Participation</CardTitle>
+              <p className="text-sm text-muted-foreground">Performance across leagues this team competed in.</p>
+            </CardHeader>
+            <CardContent>
+              {teamLeagues.length ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border border-border/60 text-sm">
+                    <thead className="bg-muted/60">
+                      <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="px-4 py-3">League</th>
+                        <th className="px-4 py-3">Matches</th>
+                        <th className="px-4 py-3">Overall</th>
+                        <th className="px-4 py-3">Radiant</th>
+                        <th className="px-4 py-3">Dire</th>
+                        <th className="px-4 py-3">Last Match</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {teamLeagues.map((league) => (
+                        <tr key={league.id} className="border-t border-border/60">
+                          <td className="px-4 py-3 font-semibold text-primary">
+                            <Link href={`/leagues/${league.slug}`}>{league.name}</Link>
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">{formatNumber(league.matchCount)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{formatPercent(league.overallWinrate)}</td>
+                          <td className="px-4 py-3 text-emerald-200">{formatPercent(league.radiantWinrate)}</td>
+                          <td className="px-4 py-3 text-red-200">{formatPercent(league.direWinrate)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {league.lastMatchTime ? formatDate(league.lastMatchTime) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No league participation data yet.</p>
+              )}
+            </CardContent>
+          </Card>
 
           <section className="grid gap-6 lg:grid-cols-3">
             {[

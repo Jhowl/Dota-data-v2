@@ -225,6 +225,88 @@ export async function getPatches(): Promise<Patch[]> {
   return data.map((row) => mapPatch(row as Record<string, unknown>));
 }
 
+export type PatchWithCount = Patch & { matchCount: number };
+
+export async function getPatchesWithCounts(): Promise<PatchWithCount[]> {
+  if (!supabase) {
+    const counts = mockMatches.reduce<Record<string, number>>((acc, match) => {
+      acc[match.patchId] = (acc[match.patchId] ?? 0) + 1;
+      return acc;
+    }, {});
+    return mockPatches.map((patch) => ({
+      ...patch,
+      matchCount: counts[patch.id] ?? 0,
+    }));
+  }
+
+  const { data, error } = await supabase
+    .from("patch")
+    .select("id,patch,matches(count)")
+    .order("id", { ascending: false });
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data.map((row) => {
+    const record = row as Record<string, unknown>;
+    const matches = Array.isArray(record.matches) ? (record.matches as Array<Record<string, unknown>>) : [];
+    const matchCount = matches[0]?.count ? Number(matches[0].count) : 0;
+    return {
+      id: String(record.id ?? ""),
+      patch: String(record.patch ?? ""),
+      matchCount,
+    };
+  });
+}
+
+export async function getPatchBySlug(patchSlug: string): Promise<Patch | null> {
+  if (!supabase || !patchSlug) {
+    return null;
+  }
+  const { data, error } = await supabase.from("patch").select("*").eq("patch", patchSlug).maybeSingle();
+  if (error || !data) {
+    return null;
+  }
+  return mapPatch(data as Record<string, unknown>);
+}
+
+export async function getMatchesByPatch(patchId: string): Promise<Match[]> {
+  if (!patchId) {
+    return [];
+  }
+
+  if (!supabase) {
+    return mockMatches.filter((match) => match.patchId === patchId);
+  }
+
+  const results: Match[] = [];
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("matches")
+      .select("match_id,league_id,duration,start_time,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,first_tower_time,patch_id,picks_bans")
+      .eq("patch_id", patchId)
+      .order("start_time", { ascending: false })
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      break;
+    }
+
+    if (!data?.length) {
+      break;
+    }
+
+    results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
+    from += pageSize;
+  }
+
+  return results;
+}
+
 export async function getHeroes(): Promise<Hero[]> {
   if (!supabase) {
     return [];
@@ -356,6 +438,60 @@ export async function getTopPerformersByTeam(teamId: string): Promise<TopPerform
         .from("player_matches")
         .select("match_id,hero_id,team_id,account_id,kills,deaths,assists," + stat.field)
         .eq("team_id", teamId)
+        .not(stat.field, "is", null)
+        .gt(stat.field, 0)
+        .order(stat.field, { ascending: false })
+        .limit(1);
+
+      if (error || !data?.length) {
+        return { key: stat.key, title: stat.title, performer: null };
+      }
+
+      const row = data[0] as Record<string, unknown>;
+
+      return {
+        key: stat.key,
+        title: stat.title,
+        performer: {
+          matchId: String(row.match_id ?? ""),
+          heroId: row.hero_id ? String(row.hero_id) : null,
+          teamId: row.team_id ? String(row.team_id) : null,
+          accountId: row.account_id ? String(row.account_id) : null,
+          statValue: Number(row[stat.field] ?? 0),
+          kills: Number(row.kills ?? 0),
+          deaths: Number(row.deaths ?? 0),
+          assists: Number(row.assists ?? 0),
+        },
+      };
+    })
+  );
+
+  return results;
+}
+
+export async function getTopPerformersByPatch(patchId: string): Promise<TopPerformerStat[]> {
+  const stats = [
+    { key: "kills", title: "Most Kills", field: "kills" },
+    { key: "deaths", title: "Most Deaths", field: "deaths" },
+    { key: "assists", title: "Most Assists", field: "assists" },
+    { key: "gold", title: "Most Gold", field: "gold" },
+    { key: "denies", title: "Most Denies", field: "denies" },
+    { key: "hero_damage", title: "Most Hero Damage", field: "hero_damage" },
+    { key: "last_hits", title: "Most Last Hits", field: "last_hits" },
+    { key: "tower_damage", title: "Most Tower Damage", field: "tower_damage" },
+    { key: "hero_healing", title: "Most Healing", field: "hero_healing" },
+  ];
+
+  if (!supabase || !patchId) {
+    return stats.map((stat) => ({ key: stat.key, title: stat.title, performer: null }));
+  }
+
+  const results = await Promise.all(
+    stats.map(async (stat) => {
+      const { data, error } = await supabase
+        .from("player_matches")
+        .select(`match_id,hero_id,team_id,account_id,kills,deaths,assists,${stat.field},matches!inner(patch_id)`)
+        .eq("matches.patch_id", patchId)
         .not(stat.field, "is", null)
         .gt(stat.field, 0)
         .order(stat.field, { ascending: false })
@@ -603,6 +739,18 @@ export type TeamSummary = {
   fastestMatchDuration: number | null;
   longestMatchId: string | null;
   longestMatchDuration: number | null;
+  leagues?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    matchCount: number;
+    radiantWinrate: number;
+    direWinrate: number;
+    overallWinrate: number;
+    lastMatchTime: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+  }>;
 };
 
 export type SeasonSnapshot = {

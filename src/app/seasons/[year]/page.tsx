@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { YearlyMetricLine } from "@/components/charts/yearly-metric-line";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
+import { createHeroImageResolver } from "@/lib/hero";
 import {
   getHeroes,
   getMatchesByYear,
@@ -66,17 +67,7 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
 
   const teamNameLookup = new Map(teams.map((team) => [team.id, team.name]));
   const heroLookup = new Map(heroes.map((hero) => [hero.id, hero.localizedName]));
-  const heroSlugLookup = new Map(heroes.map((hero) => [hero.id, hero.name.replace("npc_dota_hero_", "")]));
-  const buildHeroImageUrl = (heroId?: string | null) => {
-    if (!heroId) {
-      return null;
-    }
-    const heroSlug = heroSlugLookup.get(heroId);
-    if (!heroSlug) {
-      return null;
-    }
-    return `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${heroSlug}_sb.png`;
-  };
+  const buildHeroImageUrl = createHeroImageResolver(heroes);
 
   const summary = snapshot?.totals ?? {
     totalMatches: 0,

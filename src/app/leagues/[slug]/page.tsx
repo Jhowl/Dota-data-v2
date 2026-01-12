@@ -4,6 +4,7 @@ import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
+import { createHeroImageResolver } from "@/lib/hero";
 import {
   getLeagueBySlug,
   getHeroes,
@@ -85,7 +86,6 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
 
   const teamLookup = new Map(teams.map((team) => [team.id, team.name]));
   const heroLookup = new Map(heroes.map((hero) => [hero.id, hero.localizedName]));
-  const heroSlugLookup = new Map(heroes.map((hero) => [hero.id, hero.name.replace("npc_dota_hero_", "")]));
   const matchById = new Map(highlightMatches.map((match) => [match.id, match]));
   const summary = {
     totalMatches: leagueSummary?.totalMatches ?? 0,
@@ -101,16 +101,7 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
     maxScoreMatch: leagueSummary?.maxScoreMatchId ? matchById.get(leagueSummary.maxScoreMatchId) ?? null : null,
   };
   const direWinRate = summary.totalMatches ? 100 - summary.radiantWinRate : 0;
-  const buildHeroImageUrl = (heroId?: string | null) => {
-    if (!heroId) {
-      return null;
-    }
-    const heroSlug = heroSlugLookup.get(heroId);
-    if (!heroSlug) {
-      return null;
-    }
-    return `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${heroSlug}_sb.png`;
-  };
+  const buildHeroImageUrl = createHeroImageResolver(heroes);
 
   return (
     <>
