@@ -160,22 +160,22 @@ export default async function InternationalPage() {
           Jump into each year&apos;s tournament page to see match timelines, team performance, and patch-specific
           shifts that shaped the meta.
         </p>
-        <ul className="mt-4 list-disc space-y-1 pl-6 text-sm text-muted-foreground">
-          {internationalLeagues.length ? (
-            internationalLeagues.map((league) => (
-              <li key={league.id}>
+        {internationalLeagues.length ? (
+          <div className="mt-5 columns-1 gap-3 text-sm text-muted-foreground sm:columns-2 lg:columns-3">
+            {internationalLeagues.map((league) => (
+              <div key={league.id} className="mb-3 break-inside-avoid rounded-lg border border-border/60 bg-background/40 px-3 py-2">
                 <Link href={`/leagues/${league.slug}`} className="font-semibold text-primary">
                   {league.name}
                 </Link>
-                <span className="ml-2 text-muted-foreground">
-                  ({league.startDate ? new Date(league.startDate).getFullYear() : ""})
+                <span className="ml-2 text-xs text-muted-foreground">
+                  ({league.startDate ? new Date(league.startDate).getFullYear() : "N/A"})
                 </span>
-              </li>
-            ))
-          ) : (
-            <li>No International events found.</li>
-          )}
-        </ul>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-muted-foreground">No International events found.</p>
+        )}
       </section>
 
       {!summary.totalMatches ? (
