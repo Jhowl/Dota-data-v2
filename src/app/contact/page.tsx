@@ -1,8 +1,7 @@
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { ContactForm } from "@/components/contact-form";
 
 export const metadata = {
   title: "Contact Us - Get in Touch",
@@ -52,32 +51,7 @@ export default function ContactPage() {
         <Card className="border-border/60 bg-card/80">
           <CardContent className="space-y-6 p-8">
             <h2 className="text-2xl font-semibold text-foreground">Send us a Message</h2>
-            <form className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-muted-foreground">Name *</label>
-                  <Input placeholder="Your name" />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-muted-foreground">Email *</label>
-                  <Input placeholder="you@email.com" type="email" />
-                </div>
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-muted-foreground">Subject *</label>
-                <Input placeholder="What's this about?" />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-muted-foreground">Message *</label>
-                <textarea
-                  className="min-h-[140px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  placeholder="Tell us more about your question or feedback..."
-                />
-              </div>
-              <Button type="submit" className="w-full">
-                Send Message
-              </Button>
-            </form>
+            <ContactForm />
           </CardContent>
         </Card>
 
@@ -96,10 +70,6 @@ export default function ContactPage() {
               <div>
                 <h3 className="text-lg font-medium text-foreground">Feature Requests</h3>
                 <p className="text-sm text-muted-foreground">Suggest new features or improvements.</p>
-              </div>
-              <div>
-                <h3 className="text-lg font-medium text-foreground">Email</h3>
-                <p className="text-sm text-muted-foreground">hello@dotadata.com</p>
               </div>
             </CardContent>
           </Card>
