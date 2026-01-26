@@ -3,6 +3,7 @@ import Script from "next/script";
 
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { createHeroImageResolver } from "@/lib/hero";
@@ -133,7 +134,15 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
       />
 
       <section className="space-y-3">
-        <Badge className="w-fit bg-primary/10 text-primary">League overview</Badge>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <Badge className="w-fit bg-primary/10 text-primary">League overview</Badge>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/leagues/${league.slug}/export`}>Export CSV</Link>
+            </Button>
+            <span className="text-muted-foreground">Download match data for this league.</span>
+          </div>
+        </div>
         <h1 className="font-display text-3xl font-semibold md:text-4xl">{league.name}</h1>
         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
           <span>League ID: {league.id}</span>
