@@ -1,7 +1,7 @@
 import Link from "next/link";
 
+import { ExportCsvButton } from "@/components/export-csv-button";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { YearlyMetricLine } from "@/components/charts/yearly-metric-line";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
@@ -125,9 +125,7 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Badge className="w-fit bg-primary/10 text-primary">Season {seasonYear}</Badge>
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/seasons/${seasonYear}/export`}>Export CSV</Link>
-            </Button>
+            <ExportCsvButton href={`/seasons/${seasonYear}/export`} />
             <span className="text-muted-foreground">Download match data for this season.</span>
           </div>
         </div>

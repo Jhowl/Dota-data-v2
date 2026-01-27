@@ -28,23 +28,26 @@ const mapHero = (row: Record<string, unknown>): Hero => ({
     name: String(row.name ?? ''),
 });
 
-const mapMatch = (row: Record<string, unknown>): Match => ({
-    id: String(row.match_id ?? row.id ?? ''),
-    leagueId: String(row.league_id ?? ''),
-    duration: Number(row.duration ?? 0),
-    startTime: String(row.start_time ?? ''),
-    direScore: Number(row.dire_score ?? 0),
-    radiantScore: Number(row.radiant_score ?? 0),
-    radiantWin: Boolean(row.radiant_win ?? false),
-    seriesType: (row.series_type as string | null) ?? null,
-    seriesId: row.series_id ? String(row.series_id) : null,
-    radiantTeamId: row.radiant_team_id ? String(row.radiant_team_id) : null,
-    direTeamId: row.dire_team_id ? String(row.dire_team_id) : null,
-    firstTowerTeamId: row.first_tower_team_id ? String(row.first_tower_team_id) : null,
-    firstTowerTime: row.first_tower_time ? Number(row.first_tower_time) : null,
-    picksBans: Array.isArray(row.picks_bans) ? (row.picks_bans as PickBanEntry[]) : null,
-    patchId: String(row.patch_id ?? ''),
-});
+const mapMatch = (row: Record<string, unknown>): Match => {
+
+    return {
+        id: String(row.match_id ?? row.id ?? ''),
+        leagueId: String(row.league_id ?? ''),
+        duration: Number(row.duration ?? 0),
+        startTime: String(row.start_time ?? ''),
+        direScore: Number(row.dire_score ?? 0),
+        radiantScore: Number(row.radiant_score ?? 0),
+        radiantWin: Boolean(row.radiant_win ?? false),
+        seriesType: row.series_type ? String(row.series_type) : null,
+        seriesId: row.series_id ? String(row.series_id) : null,
+        radiantTeamId: row.radiant_team_id ? String(row.radiant_team_id) : null,
+        direTeamId: row.dire_team_id ? String(row.dire_team_id) : null,
+        firstTowerTeamId: row.first_tower_team_id ? String(row.first_tower_team_id) : null,
+        firstTowerTime: row.first_tower_time ? Number(row.first_tower_time) : null,
+        picksBans: Array.isArray(row.picks_bans) ? (row.picks_bans as PickBanEntry[]) : null,
+        patchId: String(row.patch_id ?? ''),
+    };
+};
 
 export async function getCounts(): Promise<{ leagues: number; teams: number; matches: number; heroes: number }> {
     if (!supabase) {
@@ -273,9 +276,7 @@ export async function getMatchesByPatch(patchId: string): Promise<Match[]> {
     while (true) {
         const { data, error } = await supabase
             .from('matches')
-            .select(
-                'match_id,league_id,duration,start_time,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,first_tower_time,patch_id,picks_bans,series_id,series_type',
-            )
+            .select('*')
             .eq('patch_id', patchId)
             .order('start_time', { ascending: false })
             .range(from, from + pageSize - 1);
@@ -805,8 +806,8 @@ export async function getMatchesByYear(year: number): Promise<Match[]> {
         return mockMatches.filter((match) => new Date(match.startTime).getFullYear() === year);
     }
 
-    const start = new Date(Date.UTC(year, 0, 1, 0, 0, 0)).toISOString();
-    const end = new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0)).toISOString();
+    const start = `${year}-01-01`;
+    const end = `${year + 1}-01-01`;
 
     const results: Match[] = [];
     const pageSize = 1000;
@@ -816,14 +817,16 @@ export async function getMatchesByYear(year: number): Promise<Match[]> {
         const { data, error } = await supabase
             .from('matches')
             .select(
-                'match_id,league_id,duration,start_time,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,first_tower_time,patch_id,picks_bans',
+                'match_id,league_id,duration,start_time,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,first_tower_time,patch_id,picks_bans,series_id,series_type',
             )
             .gte('start_time', start)
             .lt('start_time', end)
             .order('start_time', { ascending: true })
             .range(from, from + pageSize - 1);
 
+
         if (error) {
+            console.error('Error fetching matches by year:', error);
             break;
         }
 
