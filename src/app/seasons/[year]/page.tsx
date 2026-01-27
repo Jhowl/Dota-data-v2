@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { YearlyMetricLine } from "@/components/charts/yearly-metric-line";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
@@ -121,7 +122,15 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
   return (
     <div className="space-y-10">
       <section className="space-y-4">
-        <Badge className="w-fit bg-primary/10 text-primary">Season {seasonYear}</Badge>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <Badge className="w-fit bg-primary/10 text-primary">Season {seasonYear}</Badge>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/seasons/${seasonYear}/export`}>Export CSV</Link>
+            </Button>
+            <span className="text-muted-foreground">Download match data for this season.</span>
+          </div>
+        </div>
         <h1 className="font-display text-3xl font-semibold md:text-4xl">Dota 2 Season {seasonYear}</h1>
         <p className="max-w-3xl text-muted-foreground">
           A year-by-year snapshot of professional Dota 2 competition. Track the most active leagues, top teams, and

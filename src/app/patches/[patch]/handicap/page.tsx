@@ -344,8 +344,8 @@ export default async function PatchHandicapPage({ params, searchParams }: PatchH
             ) : (
                 <>
                     <section className={`grid gap-6 ${team2Data ? 'lg:grid-cols-2' : ''}`}>
-                        {team1Data ? <TeamSummary data={team1Data} /> : null}
-                        {team2Data ? <TeamSummary data={team2Data} /> : null}
+                        {team1Data ? <TeamSummaryCard data={team1Data} /> : null}
+                        {team2Data ? <TeamSummaryCard data={team2Data} /> : null}
                     </section>
 
                     {headToHead ? (
@@ -403,13 +403,13 @@ export default async function PatchHandicapPage({ params, searchParams }: PatchH
                                 {team1Data ? (
                                     <div>
                                         <p className="mb-3 text-sm font-semibold text-foreground">{team1Data.team.name}</p>
-                                        <HandicapTable data={team1Data} type={section.key} accent={section.accent} />
+                                        <HandicapTable handicapRange={handicapRange} data={team1Data} type={section.key} accent={section.accent} />
                                     </div>
                                 ) : null}
                                 {team2Data ? (
                                     <div>
                                         <p className="mb-3 text-sm font-semibold text-foreground">{team2Data.team.name}</p>
-                                        <HandicapTable data={team2Data} type={section.key} accent={section.accent} />
+                                        <HandicapTable handicapRange={handicapRange} data={team2Data} type={section.key} accent={section.accent} />
                                     </div>
                                 ) : null}
                             </CardContent>

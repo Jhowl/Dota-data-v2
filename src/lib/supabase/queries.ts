@@ -274,7 +274,7 @@ export async function getMatchesByPatch(patchId: string): Promise<Match[]> {
         const { data, error } = await supabase
             .from('matches')
             .select(
-                'match_id,league_id,duration,start_time,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,first_tower_time,patch_id,picks_bans',
+                'match_id,league_id,duration,start_time,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,first_tower_time,patch_id,picks_bans,series_id,series_type',
             )
             .eq('patch_id', patchId)
             .order('start_time', { ascending: false })
