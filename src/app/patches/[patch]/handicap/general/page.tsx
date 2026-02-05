@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { HandicapGeneralTable } from '@/components/handicap-general-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { formatNumber, formatPercent } from '@/lib/format';
@@ -32,14 +33,6 @@ type TeamBuckets = {
 };
 
 const formatHandicap = (value: number) => (value % 1 === 0 ? value.toFixed(0) : value.toFixed(1));
-
-const formatHandicapLabel = (handicap: string) => {
-    const value = Number(handicap);
-    if (Number.isFinite(value) && value > 0) {
-        return `+${handicap}`;
-    }
-    return handicap;
-};
 
 const buildHandicapRange = () => {
     const range: string[] = [];
@@ -201,45 +194,7 @@ export default async function PatchHandicapGeneralPage({ params, searchParams }:
                 <p className="text-sm text-muted-foreground">{note}</p>
             </CardHeader>
             <CardContent>
-                <div className="overflow-x-auto">
-                    <table className="min-w-full border border-border/60 text-sm">
-                        <thead className="bg-muted/60">
-                            <tr className="text-left text-xs tracking-wide text-muted-foreground uppercase">
-                                <th className="sticky left-0 z-10 min-w-[240px] bg-muted/60 px-4 py-3">Team</th>
-                                <th className="sticky left-[240px] z-10 min-w-[80px] bg-muted/60 px-4 py-3">Matches</th>
-                                <th className="sticky left-[320px] z-10 min-w-[90px] bg-muted/60 px-4 py-3">Winrate</th>
-                                {handicapRange.map((handicap) => (
-                                    <th key={handicap} className="px-3 py-3 text-center">
-                                        {formatHandicapLabel(handicap)}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rows.map(({ team, stats }) => {
-                                const winrate = stats.totalMatches ? (stats.victories / stats.totalMatches) * 100 : 0;
-                                return (
-                                    <tr key={team.id} className="border-t border-border/60">
-                                        <td className="sticky left-0 z-10 min-w-[240px] bg-card/80 px-4 py-3 font-semibold text-primary">
-                                            <Link href={`/teams/${team.slug || team.id}`}>{team.name}</Link>
-                                        </td>
-                                        <td className="sticky left-[240px] z-10 min-w-[80px] bg-card/80 px-4 py-3 text-muted-foreground">
-                                            {formatNumber(stats.totalMatches)}
-                                        </td>
-                                        <td className="sticky left-[320px] z-10 min-w-[90px] bg-card/80 px-4 py-3 text-muted-foreground">
-                                            {formatPercent(winrate)}
-                                        </td>
-                                        {handicapRange.map((handicap) => (
-                                            <td key={handicap} className="px-3 py-3 text-center text-muted-foreground">
-                                                {stats.percentages[type][handicap] ?? 0}%
-                                            </td>
-                                        ))}
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                <HandicapGeneralTable rows={rows} handicapRange={handicapRange} type={type} />
             </CardContent>
         </Card>
     );

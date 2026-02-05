@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { HandicapTable } from '@/components/handicap-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { formatNumber, formatPercent } from '@/lib/format';
@@ -37,14 +38,6 @@ type TeamHandicapData = {
 };
 
 const formatHandicap = (value: number) => (value % 1 === 0 ? value.toFixed(0) : value.toFixed(1));
-
-const formatHandicapLabel = (handicap: string) => {
-    const value = Number(handicap);
-    if (Number.isFinite(value) && value > 0) {
-        return `+${handicap}`;
-    }
-    return handicap;
-};
 
 const buildHandicapRange = () => {
     const range: string[] = [];
@@ -157,39 +150,6 @@ const TeamSummaryCard = ({ data }: { data: TeamHandicapData }) => (
             ))}
         </CardContent>
     </Card>
-);
-
-const HandicapTable = ({
-    handicapRange,
-    data,
-    type,
-    accent,
-}: {
-    handicapRange: string[];
-    data: TeamHandicapData;
-    type: 'victories' | 'losses' | 'general';
-    accent: string;
-}) => (
-    <div className="overflow-x-auto">
-        <table className="min-w-full border border-border/60 text-sm">
-            <thead className="bg-muted/60">
-                <tr className="text-left text-xs tracking-wide text-muted-foreground uppercase">
-                    <th className="px-3 py-2">Handicap</th>
-                    <th className="px-3 py-2">Count</th>
-                    <th className="px-3 py-2">%</th>
-                </tr>
-            </thead>
-            <tbody>
-                {handicapRange.map((handicap) => (
-                    <tr key={handicap} className="border-t border-border/60">
-                        <td className="px-3 py-2 font-semibold text-foreground">{formatHandicapLabel(handicap)}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{formatNumber(data.handicap.counts[type][handicap] ?? 0)}</td>
-                        <td className={`px-3 py-2 ${accent}`}>{data.handicap.percentages[type][handicap] ?? 0}%</td>
-                    </tr>
-                ))}
-            </tbody>
-        </table>
-    </div>
 );
 
 export const revalidate = 86400;
