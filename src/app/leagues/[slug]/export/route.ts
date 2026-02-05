@@ -1,8 +1,7 @@
-import { buildMatchCsv } from "@/lib/exports/match-csv";
+import { buildCsvResponse, buildMatchCsv } from "@/lib/exports/match-csv";
 import { getAllMatchesByLeague, getLeagueBySlug, getPatches, getTeams } from "@/lib/supabase/queries";
 
-export const revalidate = 0;
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -26,14 +25,5 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   });
   const filename = `league-${league.slug}-matches.csv`;
 
-  return new Response(csv, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-      Pragma: "no-cache",
-      Expires: "0",
-    },
-  });
+  return buildCsvResponse(csv, filename);
 }

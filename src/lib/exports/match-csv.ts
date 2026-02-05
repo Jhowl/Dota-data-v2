@@ -32,6 +32,16 @@ export const matchCsvHeader = [
   "patch",
 ];
 
+export const buildCsvResponse = (csv: string, filename: string, cacheSeconds = 3600) =>
+  new Response(csv, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": `public, s-maxage=${cacheSeconds}, max-age=0, stale-while-revalidate=86400`,
+    },
+  });
+
 export function buildMatchCsv({
   matches,
   teams,
