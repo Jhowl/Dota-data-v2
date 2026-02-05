@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/stat-card";
 import { formatNumber, formatPercent } from "@/lib/format";
 import { summarizeMatches } from "@/lib/stats";
-import { getCounts, getLeagues, getPatches, getRecentMatches } from "@/lib/supabase/queries";
+import { getCounts, getLeagues, getPatches, getPatchTrendStats, getRecentMatches } from "@/lib/supabase/queries";
 
 export const metadata = {
   title: "DotaData - Professional Dota 2 Statistics, Team Analysis & League Data",
@@ -50,11 +50,12 @@ const formatMinutes = (seconds: number) => `${(seconds / 60).toFixed(1)}m`;
 
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();
-  const [counts, leagues, patches, matches] = await Promise.all([
+  const [counts, leagues, patches, matches, patchTrendStats] = await Promise.all([
     getCounts(),
     getLeagues(),
     getPatches(),
     getRecentMatches(2000),
+    getPatchTrendStats(),
   ]);
 
   const leagueLookup = new Map(leagues.map((league) => [league.id, league]));
@@ -212,10 +213,10 @@ export default async function HomePage() {
           <Card className="border-border/60 bg-card/80">
             <CardHeader>
               <CardTitle>Patch trend</CardTitle>
-              <p className="text-sm text-muted-foreground">Matches and average duration by patch.</p>
+              <p className="text-sm text-muted-foreground">Matches and average duration (min) by patch.</p>
             </CardHeader>
             <CardContent>
-              <PatchTrend patches={patches} matches={yearMatches} />
+              <PatchTrend patches={patches} stats={patchTrendStats} />
             </CardContent>
           </Card>
           <Card className="border-border/60 bg-card/80">

@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { leagues as mockLeagues, matches as mockMatches, patches as mockPatches, teams as mockTeams } from '@/lib/data/mock';
 import { supabase } from '@/lib/supabase/client';
 import { Hero, League, Match, Patch, PickBanEntry, PickBanStat, Team } from '@/lib/types';
@@ -216,6 +217,62 @@ export async function getPatches(): Promise<Patch[]> {
 
     return data.map((row) => mapPatch(row as Record<string, unknown>));
 }
+
+export const getPatchTrendStats = cache(async (): Promise<Array<{ patchId: string; matches: number; avgDuration: number }>> => {
+    if (!supabase) {
+        const totals = new Map<string, { matches: number; durationSum: number }>();
+        mockMatches.forEach((match) => {
+            const entry = totals.get(match.patchId) ?? { matches: 0, durationSum: 0 };
+            entry.matches += 1;
+            entry.durationSum += match.duration;
+            totals.set(match.patchId, entry);
+        });
+
+        return Array.from(totals.entries()).map(([patchId, entry]) => ({
+            patchId,
+            matches: entry.matches,
+            avgDuration: entry.matches ? entry.durationSum / entry.matches / 60 : 0,
+        }));
+    }
+
+    const totals = new Map<string, { matches: number; durationSum: number }>();
+    const pageSize = 1000;
+    let from = 0;
+
+    while (true) {
+        const { data, error } = await supabase
+            .from('matches')
+            .select('patch_id,duration')
+            .range(from, from + pageSize - 1);
+
+        if (error) {
+            break;
+        }
+
+        if (!data?.length) {
+            break;
+        }
+
+        data.forEach((row) => {
+            const patchId = row.patch_id ? String(row.patch_id) : '';
+            if (!patchId) {
+                return;
+            }
+            const entry = totals.get(patchId) ?? { matches: 0, durationSum: 0 };
+            entry.matches += 1;
+            entry.durationSum += Number(row.duration ?? 0);
+            totals.set(patchId, entry);
+        });
+
+        from += pageSize;
+    }
+
+    return Array.from(totals.entries()).map(([patchId, entry]) => ({
+        patchId,
+        matches: entry.matches,
+        avgDuration: entry.matches ? entry.durationSum / entry.matches / 60 : 0,
+    }));
+});
 
 export type PatchWithCount = Patch & { matchCount: number };
 

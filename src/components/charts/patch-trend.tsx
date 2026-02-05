@@ -9,25 +9,25 @@ import {
   YAxis,
 } from "recharts";
 
-import { Match, Patch } from "@/lib/types";
+import { Patch } from "@/lib/types";
 
 interface PatchTrendProps {
   patches: Patch[];
-  matches: Match[];
+  stats: Array<{ patchId: string; matches: number; avgDuration: number }>;
 }
 
-export function PatchTrend({ patches, matches }: PatchTrendProps) {
+export function PatchTrend({ patches, stats }: PatchTrendProps) {
+  const statsLookup = new Map(stats.map((item) => [item.patchId, item]));
   const data = patches
     .slice()
     .reverse()
     .map((patch) => {
-      const patchMatches = matches.filter((match) => match.patchId === patch.id);
-      const totalDuration = patchMatches.reduce((sum, match) => sum + match.duration, 0);
-      const avgDuration = patchMatches.length ? totalDuration / patchMatches.length : 0;
+      const patchStats = statsLookup.get(patch.id);
+      const avgDuration = patchStats?.avgDuration ?? 0;
 
       return {
         name: patch.patch,
-        matches: patchMatches.length,
+        matches: patchStats?.matches ?? 0,
         duration: Number(avgDuration.toFixed(1)),
       };
     });
