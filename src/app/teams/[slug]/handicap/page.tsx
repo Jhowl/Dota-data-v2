@@ -14,6 +14,7 @@ type HandicapStats = {
   totalMatches: number;
   wins: number;
   losses: number;
+  lastMatchTime: string | null;
   handicapStatsWins: Record<string, number>;
   handicapStatsLosses: Record<string, number>;
   percentagesWins: Record<string, number>;
@@ -38,12 +39,21 @@ const createStats = (handicapRange: string[]): HandicapStats => ({
   totalMatches: 0,
   wins: 0,
   losses: 0,
+  lastMatchTime: null,
   handicapStatsWins: Object.fromEntries(handicapRange.map((handicap) => [handicap, 0])),
   handicapStatsLosses: Object.fromEntries(handicapRange.map((handicap) => [handicap, 0])),
   percentagesWins: Object.fromEntries(handicapRange.map((handicap) => [handicap, 0])),
   percentagesLosses: Object.fromEntries(handicapRange.map((handicap) => [handicap, 0])),
   percentagesTotal: Object.fromEntries(handicapRange.map((handicap) => [handicap, 0])),
 });
+
+const parseMatchTime = (value: string | null) => {
+  if (!value) {
+    return 0;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
 
 const applyHandicap = (killDifference: number, handicapRange: string[], stats: Record<string, number>) => {
   handicapRange.forEach((handicap) => {
@@ -141,6 +151,9 @@ export default async function TeamHandicapPage({ params }: TeamHandicapPageProps
         return;
       }
       stats.totalMatches += 1;
+      if (parseMatchTime(match.startTime) > parseMatchTime(stats.lastMatchTime)) {
+        stats.lastMatchTime = match.startTime;
+      }
       if (teamWon) {
         stats.wins += 1;
         applyHandicap(killDifference, handicapRange, stats.handicapStatsWins);
@@ -160,6 +173,9 @@ export default async function TeamHandicapPage({ params }: TeamHandicapPageProps
         return;
       }
       stats.totalMatches += 1;
+      if (parseMatchTime(match.startTime) > parseMatchTime(stats.lastMatchTime)) {
+        stats.lastMatchTime = match.startTime;
+      }
       if (teamWon) {
         stats.wins += 1;
         applyHandicap(killDifference, handicapRange, stats.handicapStatsWins);
@@ -181,7 +197,7 @@ export default async function TeamHandicapPage({ params }: TeamHandicapPageProps
         stats,
       };
     })
-    .sort((a, b) => b.stats.totalMatches - a.stats.totalMatches);
+    .sort((a, b) => parseMatchTime(b.stats.lastMatchTime) - parseMatchTime(a.stats.lastMatchTime));
 
   const patchRows = Array.from(patchStats.entries())
     .map(([patchId, stats]) => {
@@ -193,7 +209,7 @@ export default async function TeamHandicapPage({ params }: TeamHandicapPageProps
         stats,
       };
     })
-    .sort((a, b) => b.stats.totalMatches - a.stats.totalMatches);
+    .sort((a, b) => parseMatchTime(b.stats.lastMatchTime) - parseMatchTime(a.stats.lastMatchTime));
 
   finalizePercentages(overallStats, handicapRange);
 
