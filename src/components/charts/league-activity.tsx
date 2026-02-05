@@ -41,14 +41,21 @@ export function LeagueActivity({ leagues, matches }: LeagueActivityProps) {
             dataKey="shortName"
             tick={{ fontSize: 12 }}
             interval={0}
-            angle={-35}
-            height={70}
-            tickMargin={8}
+            angle={-55}
+            height={90}
+            tickMargin={12}
+            textAnchor="end"
           />
           <YAxis tick={{ fontSize: 12 }} />
           <Tooltip
             cursor={{ fill: "rgba(24, 185, 157, 0.12)" }}
-            contentStyle={{ borderRadius: 12, borderColor: "rgba(0,0,0,0.08)" }}
+            contentStyle={{
+              borderRadius: 12,
+              borderColor: "rgba(15, 23, 42, 0.8)",
+              backgroundColor: "rgba(15, 23, 42, 0.95)",
+            }}
+            itemStyle={{ color: "#e2e8f0" }}
+            labelStyle={{ color: "#f8fafc", fontWeight: 600 }}
             labelFormatter={(_, payload) => payload?.[0]?.payload?.name ?? ""}
           />
           <Bar dataKey="matches" fill="var(--primary)" radius={[8, 8, 0, 0]} />

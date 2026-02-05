@@ -26,7 +26,15 @@ export function YearlyMetricLine({ data, color }: YearlyMetricLineProps) {
         <LineChart data={data} margin={{ left: 8, right: 8, top: 8 }}>
           <XAxis dataKey="month" tick={{ fontSize: 12 }} />
           <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
-          <Tooltip contentStyle={{ borderRadius: 12, borderColor: "rgba(0,0,0,0.08)" }} />
+          <Tooltip
+            contentStyle={{
+              borderRadius: 12,
+              borderColor: "rgba(15, 23, 42, 0.8)",
+              backgroundColor: "rgba(15, 23, 42, 0.95)",
+            }}
+            itemStyle={{ color: "#e2e8f0" }}
+            labelStyle={{ color: "#f8fafc", fontWeight: 600 }}
+          />
           <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={{ r: 3 }} />
         </LineChart>
       </ResponsiveContainer>

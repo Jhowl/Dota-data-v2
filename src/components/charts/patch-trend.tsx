@@ -40,7 +40,13 @@ export function PatchTrend({ patches, stats }: PatchTrendProps) {
           <YAxis yAxisId="left" tick={{ fontSize: 12 }} allowDecimals={false} />
           <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
           <Tooltip
-            contentStyle={{ borderRadius: 12, borderColor: "rgba(0,0,0,0.08)" }}
+            contentStyle={{
+              borderRadius: 12,
+              borderColor: "rgba(15, 23, 42, 0.8)",
+              backgroundColor: "rgba(15, 23, 42, 0.95)",
+            }}
+            itemStyle={{ color: "#e2e8f0" }}
+            labelStyle={{ color: "#f8fafc", fontWeight: 600 }}
           />
           <Line
             yAxisId="left"
