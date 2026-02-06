@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import Script from "next/script";
 
 import { Badge } from "@/components/ui/badge";
@@ -157,9 +158,12 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
                     <tr key={team.id} className="border-t border-border/60">
                       <td className="px-4 py-3">
                         {team.logoUrl ? (
-                          <img
+                          <Image
                             src={team.logoUrl}
                             alt={`${team.name} logo`}
+                            width={40}
+                            height={40}
+                            unoptimized
                             className="h-10 w-10 rounded-full object-contain"
                           />
                         ) : (

@@ -154,7 +154,7 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
           <CardContent className="p-8 text-center">
             <h3 className="text-xl font-semibold text-foreground">No Match Data Available</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              This league doesn't have any matches in the database yet.
+              This league doesn&apos;t have any matches in the database yet.
             </p>
           </CardContent>
         </Card>

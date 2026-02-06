@@ -1,5 +1,7 @@
 "use client";
 
+import { memo, useMemo } from "react";
+
 import {
   Bar,
   BarChart,
@@ -17,20 +19,31 @@ interface LeagueActivityProps {
   matches: Match[];
 }
 
-export function LeagueActivity({ leagues, matches }: LeagueActivityProps) {
-  const matchesByLeague = matches.reduce<Record<string, number>>((acc, match) => {
-    acc[match.leagueId] = (acc[match.leagueId] ?? 0) + 1;
-    return acc;
-  }, {});
+const tooltipCursorStyle = { fill: "rgba(24, 185, 157, 0.12)" };
+const tooltipContentStyle = {
+  borderRadius: 12,
+  borderColor: "rgba(15, 23, 42, 0.8)",
+  backgroundColor: "rgba(15, 23, 42, 0.95)",
+};
+const tooltipItemStyle = { color: "#e2e8f0" };
+const tooltipLabelStyle = { color: "#f8fafc", fontWeight: 600 };
 
-  const data = leagues
-    .filter((league) => (matchesByLeague[league.id] ?? 0) > 0)
-    .map((league) => ({
-      name: league.name,
-      shortName: league.name.split(" ").slice(0, 3).join(" "),
-      matches: matchesByLeague[league.id] ?? 0,
-    }))
-    .sort((a, b) => b.matches - a.matches);
+function LeagueActivityChart({ leagues, matches }: LeagueActivityProps) {
+  const data = useMemo(() => {
+    const matchesByLeague = matches.reduce<Record<string, number>>((acc, match) => {
+      acc[match.leagueId] = (acc[match.leagueId] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    return leagues
+      .filter((league) => (matchesByLeague[league.id] ?? 0) > 0)
+      .map((league) => ({
+        name: league.name,
+        shortName: league.name.split(" ").slice(0, 3).join(" "),
+        matches: matchesByLeague[league.id] ?? 0,
+      }))
+      .sort((a, b) => b.matches - a.matches);
+  }, [leagues, matches]);
 
   return (
     <div className="h-[280px] min-w-0">
@@ -48,14 +61,10 @@ export function LeagueActivity({ leagues, matches }: LeagueActivityProps) {
           />
           <YAxis tick={{ fontSize: 12 }} />
           <Tooltip
-            cursor={{ fill: "rgba(24, 185, 157, 0.12)" }}
-            contentStyle={{
-              borderRadius: 12,
-              borderColor: "rgba(15, 23, 42, 0.8)",
-              backgroundColor: "rgba(15, 23, 42, 0.95)",
-            }}
-            itemStyle={{ color: "#e2e8f0" }}
-            labelStyle={{ color: "#f8fafc", fontWeight: 600 }}
+            cursor={tooltipCursorStyle}
+            contentStyle={tooltipContentStyle}
+            itemStyle={tooltipItemStyle}
+            labelStyle={tooltipLabelStyle}
             labelFormatter={(_, payload) => payload?.[0]?.payload?.name ?? ""}
           />
           <Bar dataKey="matches" fill="var(--primary)" radius={[8, 8, 0, 0]} />
@@ -64,3 +73,5 @@ export function LeagueActivity({ leagues, matches }: LeagueActivityProps) {
     </div>
   );
 }
+
+export const LeagueActivity = memo(LeagueActivityChart);

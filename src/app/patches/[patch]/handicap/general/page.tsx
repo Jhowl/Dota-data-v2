@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { HandicapGeneralTable } from '@/components/handicap-general-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { formatNumber, formatPercent } from '@/lib/format';
 import { getMatchesByPatch, getPatchBySlug, getTeamsByIds } from '@/lib/supabase/queries';
 import type { Match, Team } from '@/lib/types';
 

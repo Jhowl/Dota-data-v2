@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import Script from "next/script";
 
 import { Breadcrumbs } from "@/components/breadcrumbs";
@@ -145,7 +146,14 @@ export default async function TeamPage({ params }: TeamPageProps) {
             <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
               <span>Team ID: {team.id}</span>
               {team.logoUrl ? (
-                <img src={team.logoUrl} alt={`${team.name} logo`} className="h-10 w-10 rounded-full" />
+                <Image
+                  src={team.logoUrl}
+                  alt={`${team.name} logo`}
+                  width={40}
+                  height={40}
+                  unoptimized
+                  className="h-10 w-10 rounded-full"
+                />
               ) : null}
             </div>
           </div>
@@ -160,7 +168,7 @@ export default async function TeamPage({ params }: TeamPageProps) {
           <CardContent className="p-8 text-center">
             <h3 className="text-xl font-semibold text-foreground">No Match Data Available</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              This team doesn't have any matches in the database yet.
+              This team doesn&apos;t have any matches in the database yet.
             </p>
           </CardContent>
         </Card>

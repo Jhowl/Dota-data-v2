@@ -48,6 +48,8 @@ export function DataTable<TData>({
     });
   }, [data, query, searchKey]);
 
+  // TanStack Table's table instance is intentionally non-memoizable for React Compiler.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: filteredData,
     columns,

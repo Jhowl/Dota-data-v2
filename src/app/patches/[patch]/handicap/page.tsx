@@ -298,7 +298,7 @@ export default async function PatchHandicapPage({ params, searchParams }: PatchH
             ) : !team1 ? (
                 <Card className="border-border/60 bg-card/80">
                     <CardContent className="p-6 text-sm text-muted-foreground">
-                        Team "{team1Input}" not found for patch {patchEntry.patch}. Use the suggestions from the dropdown.
+                        Team &quot;{team1Input}&quot; not found for patch {patchEntry.patch}. Use the suggestions from the dropdown.
                     </CardContent>
                 </Card>
             ) : (

@@ -1052,8 +1052,6 @@ export type TeamMatchStats = Record<
     }
 >;
 
-type PickBanBuckets = Record<string, { heroId: string; team: number; total: number }>;
-
 const parsePickBans = (value: unknown): PickBanEntry[] => {
     if (!value) {
         return [];
@@ -1070,18 +1068,6 @@ const parsePickBans = (value: unknown): PickBanEntry[] => {
         }
     }
     return [];
-};
-
-const incrementBucket = (bucket: PickBanBuckets, entry: PickBanEntry) => {
-    const heroId = String(entry.hero_id ?? '');
-    if (!heroId) {
-        return;
-    }
-    const key = `${entry.team ?? 0}:${heroId}`;
-    if (!bucket[key]) {
-        bucket[key] = { heroId, team: Number(entry.team ?? 0), total: 0 };
-    }
-    bucket[key].total += 1;
 };
 
 const incrementBucketByHero = (bucket: Record<string, { heroId: string; team: number | null; total: number }>, entry: PickBanEntry) => {

@@ -8,7 +8,6 @@ import { formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { createHeroImageResolver } from "@/lib/hero";
 import {
   getHeroes,
-  getMatchesByYear,
   getMatchesByIds,
   getSeasonSnapshot,
   getTeams,
@@ -63,8 +62,6 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
     getHeroes(),
     getSeasonSnapshot(seasonYear),
   ]);
-
-  const matches = snapshot ? [] : await getMatchesByYear(seasonYear);
 
   const teamNameLookup = new Map(teams.map((team) => [team.id, team.name]));
   const heroLookup = new Map(heroes.map((hero) => [hero.id, hero.localizedName]));

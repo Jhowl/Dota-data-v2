@@ -1,5 +1,7 @@
 "use client";
 
+import { memo } from "react";
+
 import {
   Line,
   LineChart,
@@ -19,7 +21,17 @@ interface YearlyMetricLineProps {
   color: string;
 }
 
-export function YearlyMetricLine({ data, color }: YearlyMetricLineProps) {
+const tooltipContentStyle = {
+  borderRadius: 12,
+  borderColor: "rgba(15, 23, 42, 0.8)",
+  backgroundColor: "rgba(15, 23, 42, 0.95)",
+};
+const tooltipItemStyle = { color: "#e2e8f0" };
+const tooltipLabelStyle = { color: "#f8fafc", fontWeight: 600 };
+
+function YearlyMetricLineChart({ data, color }: YearlyMetricLineProps) {
+  const showDots = data.length <= 24;
+
   return (
     <div className="h-[260px] min-w-0">
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
@@ -27,17 +39,16 @@ export function YearlyMetricLine({ data, color }: YearlyMetricLineProps) {
           <XAxis dataKey="month" tick={{ fontSize: 12 }} />
           <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
           <Tooltip
-            contentStyle={{
-              borderRadius: 12,
-              borderColor: "rgba(15, 23, 42, 0.8)",
-              backgroundColor: "rgba(15, 23, 42, 0.95)",
-            }}
-            itemStyle={{ color: "#e2e8f0" }}
-            labelStyle={{ color: "#f8fafc", fontWeight: 600 }}
+            contentStyle={tooltipContentStyle}
+            itemStyle={tooltipItemStyle}
+            labelStyle={tooltipLabelStyle}
+            isAnimationActive={false}
           />
-          <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={{ r: 3 }} />
+          <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={showDots ? { r: 3 } : false} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
   );
 }
+
+export const YearlyMetricLine = memo(YearlyMetricLineChart);

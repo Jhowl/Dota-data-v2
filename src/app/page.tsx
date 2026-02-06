@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/stat-card";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { summarizeMatches } from "@/lib/stats";
-import { getCounts, getLeagues, getPatches, getPatchTrendStats, getRecentMatches } from "@/lib/supabase/queries";
+import { getCounts, getLeagues, getPatches, getRecentMatches } from "@/lib/supabase/queries";
 
 export const metadata = {
   title: "DotaData - Dota 2 Analytics Dashboard, Leagues & Match Insights",
@@ -52,12 +52,11 @@ const formatMinutes = (seconds: number) => `${(seconds / 60).toFixed(1)}m`;
 
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();
-  const [counts, leagues, patches, matches, patchTrendStats] = await Promise.all([
+  const [counts, leagues, patches, matches] = await Promise.all([
     getCounts(),
     getLeagues(),
     getPatches(),
     getRecentMatches(2000),
-    getPatchTrendStats(),
   ]);
 
   const leagueLookup = new Map(leagues.map((league) => [league.id, league]));
@@ -101,6 +100,21 @@ export default async function HomePage() {
     month: bucket.month,
     avgDuration: bucket.count ? Number(((bucket.durationSum / bucket.count) / 60).toFixed(1)) : 0,
     avgScore: bucket.count ? Number((bucket.scoreSum / bucket.count).toFixed(1)) : 0,
+  }));
+
+  const patchTotals = matches.reduce<Record<string, { matches: number; durationSum: number }>>((acc, match) => {
+    const key = match.patchId;
+    const entry = acc[key] ?? { matches: 0, durationSum: 0 };
+    entry.matches += 1;
+    entry.durationSum += match.duration;
+    acc[key] = entry;
+    return acc;
+  }, {});
+
+  const patchTrendStats = Object.entries(patchTotals).map(([patchId, entry]) => ({
+    patchId,
+    matches: entry.matches,
+    avgDuration: entry.matches ? entry.durationSum / entry.matches / 60 : 0,
   }));
 
   const leagueStats = yearMatches.reduce<Record<string, { matches: number; durationSum: number; scoreSum: number; radiantWins: number }>>(
