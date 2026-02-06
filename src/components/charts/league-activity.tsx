@@ -33,8 +33,8 @@ export function LeagueActivity({ leagues, matches }: LeagueActivityProps) {
     .sort((a, b) => b.matches - a.matches);
 
   return (
-    <div className="h-[280px]">
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="h-[280px] min-w-0">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <BarChart data={data} margin={{ left: 8, right: 8 }}>
           <CartesianGrid strokeDasharray="4 4" opacity={0.3} />
           <XAxis

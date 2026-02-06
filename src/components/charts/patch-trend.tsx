@@ -33,8 +33,8 @@ export function PatchTrend({ patches, stats }: PatchTrendProps) {
     });
 
   return (
-    <div className="h-[280px]">
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="h-[280px] min-w-0">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <LineChart data={data} margin={{ left: 8, right: 8 }}>
           <XAxis dataKey="name" tick={{ fontSize: 12 }} />
           <YAxis yAxisId="left" tick={{ fontSize: 12 }} allowDecimals={false} />

@@ -9,35 +9,37 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/stat-card";
-import { formatNumber, formatPercent } from "@/lib/format";
+import { formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { summarizeMatches } from "@/lib/stats";
 import { getCounts, getLeagues, getPatches, getPatchTrendStats, getRecentMatches } from "@/lib/supabase/queries";
 
 export const metadata = {
-  title: "DotaData - Professional Dota 2 Statistics, Team Analysis & League Data",
+  title: "DotaData - Dota 2 Analytics Dashboard, Leagues & Match Insights",
   description:
-    "Comprehensive Dota 2 competitive statistics and analysis. Track professional matches, teams, and league performance data.",
+    "Dota 2 analytics dashboard covering league activity, patch trends, and season KPIs. Track pro matches, teams, and meta shifts in one place.",
   keywords: [
     "Dota 2 stats",
     "Dota 2 esports",
+    "Dota 2 dashboard",
     "Dota 2 leagues",
     "Dota 2 teams",
     "Dota 2 match analysis",
+    "Dota 2 analytics dashboard",
     "Dota 2 meta",
     "Dota 2 analytics",
   ],
   openGraph: {
-    title: "DotaData - Professional Dota 2 Statistics, Team Analysis & League Data",
+    title: "DotaData - Dota 2 Analytics Dashboard, Leagues & Match Insights",
     description:
-      "Comprehensive Dota 2 competitive statistics and analysis. Track professional matches, teams, and league performance data.",
+      "Dota 2 analytics dashboard covering league activity, patch trends, and season KPIs. Track pro matches, teams, and meta shifts in one place.",
     type: "website",
     url: "/",
   },
   twitter: {
     card: "summary_large_image",
-    title: "DotaData - Professional Dota 2 Statistics, Team Analysis & League Data",
+    title: "DotaData - Dota 2 Analytics Dashboard, Leagues & Match Insights",
     description:
-      "Comprehensive Dota 2 competitive statistics and analysis. Track professional matches, teams, and league performance data.",
+      "Dota 2 analytics dashboard covering league activity, patch trends, and season KPIs. Track pro matches, teams, and meta shifts in one place.",
   },
   alternates: {
     canonical: "/",
@@ -59,6 +61,7 @@ export default async function HomePage() {
   ]);
 
   const leagueLookup = new Map(leagues.map((league) => [league.id, league]));
+  const patchLookup = new Map(patches.map((patch) => [patch.id, patch]));
 
   const yearMatches = matches.filter((match) => {
     const year = new Date(match.startTime).getFullYear();
@@ -134,53 +137,149 @@ export default async function HomePage() {
     .sort((a, b) => b.matches - a.matches)
     .slice(0, 12);
 
+  const parseMatchTime = (value: string) => {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
+  const latestMatch = yearMatches.reduce<typeof yearMatches[number] | null>((acc, match) => {
+    if (!acc) {
+      return match;
+    }
+    return parseMatchTime(match.startTime) > parseMatchTime(acc.startTime) ? match : acc;
+  }, null);
+
+  const latestPatch = latestMatch ? patchLookup.get(latestMatch.patchId) ?? null : null;
+  const latestLeague = latestMatch ? leagueLookup.get(latestMatch.leagueId) ?? null : null;
+
   return (
-    <div className="space-y-12">
-      <section className="space-y-4">
-        <Badge className="w-fit bg-primary/10 text-primary">Home dashboard</Badge>
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="font-display text-3xl font-semibold md:text-4xl">Season pulse</h1>
-            <p className="mt-2 max-w-2xl text-muted-foreground">
-              Headline KPIs, trends, and league breakdowns for professional Dota 2 matches.
+    <div className="space-y-10">
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-border/60 bg-card/80 p-6">
+            <Badge className="w-fit bg-primary/10 text-primary">Home dashboard</Badge>
+            <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h1 className="font-display text-3xl font-semibold md:text-4xl">Season pulse</h1>
+                <p className="mt-2 max-w-2xl text-muted-foreground">
+                  Professional Dota 2 analytics in one dashboard. Monitor league activity, patch shifts, and season KPIs at a glance.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button asChild size="sm">
+                  <Link href="/leagues">Explore leagues</Link>
+                </Button>
+                <Button asChild size="sm" variant="secondary">
+                  <Link href="/teams">Browse teams</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/patches">Patch analysis</Link>
+                </Button>
+              </div>
+            </div>
+            <p className="mt-4 text-xs text-muted-foreground">
+              Trend metrics and league breakdowns use the latest 2,000 matches. Add filters for full-season coverage as data expands.
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <Button asChild size="sm">
-              <Link href="/leagues">Explore leagues</Link>
-            </Button>
-            <Button asChild size="sm" variant="secondary">
-              <Link href="/teams">Browse teams</Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/patches">Patch analysis</Link>
-            </Button>
+
+          <div className="space-y-3">
+            <div>
+              <h2 className="font-display text-2xl font-semibold">Headline KPIs</h2>
+              <p className="text-sm text-muted-foreground">Totals and current-year performance highlights.</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <StatCard label="Total matches" value={formatNumber(counts.matches)} hint="All-time" />
+              <StatCard label="Total leagues" value={formatNumber(counts.leagues)} hint="All-time" />
+              <StatCard label="Total teams" value={formatNumber(counts.teams)} hint="All-time" />
+              <StatCard label={`${currentYear} matches`} value={formatNumber(yearSummary.totalMatches)} hint="Season to date" />
+              <StatCard
+                label="Avg duration"
+                value={yearSummary.totalMatches ? formatMinutes(yearSummary.avgDuration) : "—"}
+                hint="Season average"
+              />
+              <StatCard
+                label="Radiant win rate"
+                value={yearSummary.totalMatches ? formatPercent(yearSummary.radiantWinRate) : "—"}
+                hint="Season average"
+              />
+            </div>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Assumption: trend metrics and league breakdowns use the latest 2,000 matches (existing data feed). Add filters
-          for full-season coverage and time ranges when available.
-        </p>
-      </section>
 
-      <section className="space-y-4">
-        <div>
-          <h2 className="font-display text-2xl font-semibold">Headline KPIs</h2>
-          <p className="text-sm text-muted-foreground">Totals and current-year performance highlights.</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Total matches" value={formatNumber(counts.matches)} hint="All-time" />
-          <StatCard label={`${currentYear} matches`} value={formatNumber(yearSummary.totalMatches)} hint="Season to date" />
-          <StatCard
-            label="Avg duration"
-            value={yearSummary.totalMatches ? formatMinutes(yearSummary.avgDuration) : "—"}
-            hint="Season average"
-          />
-          <StatCard
-            label="Radiant win rate"
-            value={yearSummary.totalMatches ? formatPercent(yearSummary.radiantWinRate) : "—"}
-            hint="Season average"
-          />
+        <div className="space-y-4">
+          <Card className="border-border/60 bg-card/80">
+            <CardHeader>
+              <CardTitle>Season highlights</CardTitle>
+              <p className="text-sm text-muted-foreground">Quick context from the current season.</p>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Latest league</span>
+                <span className="font-semibold text-foreground">{latestLeague?.name ?? "—"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Latest patch</span>
+                <span className="font-semibold text-foreground">{latestPatch?.patch ?? "—"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Latest match</span>
+                <span className="font-semibold text-foreground">
+                  {latestMatch?.startTime ? formatDate(latestMatch.startTime) : "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Avg kills</span>
+                <span className="font-semibold text-foreground">
+                  {yearSummary.totalMatches ? yearSummary.avgScore.toFixed(1) : "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Avg first tower</span>
+                <span className="font-semibold text-foreground">
+                  {yearSummary.avgFirstTowerTime ? formatMinutes(yearSummary.avgFirstTowerTime) : "—"}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-border/60 bg-card/80">
+            <CardHeader>
+              <CardTitle>Season extremes</CardTitle>
+              <p className="text-sm text-muted-foreground">Fastest, slowest, and highest scoring games.</p>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <span className="text-muted-foreground">Highest total kills</span>
+                  <div className="font-semibold text-foreground">{yearSummary.maxScore || "—"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {yearSummary.maxScoreMatch ? leagueLookup.get(yearSummary.maxScoreMatch.leagueId)?.name ?? "—" : "—"}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <span className="text-muted-foreground">Fastest match</span>
+                  <div className="font-semibold text-foreground">
+                    {yearSummary.fastestMatch ? formatMinutes(yearSummary.fastestMatch.duration) : "—"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {yearSummary.fastestMatch ? leagueLookup.get(yearSummary.fastestMatch.leagueId)?.name ?? "—" : "—"}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <span className="text-muted-foreground">Longest match</span>
+                  <div className="font-semibold text-foreground">
+                    {yearSummary.longestMatch ? formatMinutes(yearSummary.longestMatch.duration) : "—"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {yearSummary.longestMatch ? leagueLookup.get(yearSummary.longestMatch.leagueId)?.name ?? "—" : "—"}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </section>
 

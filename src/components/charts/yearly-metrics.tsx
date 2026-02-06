@@ -21,8 +21,8 @@ interface YearlyMetricsProps {
 
 export function YearlyMetrics({ data }: YearlyMetricsProps) {
   return (
-    <div className="h-[320px]">
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="h-[320px] min-w-0">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <LineChart data={data} margin={{ left: 8, right: 8, top: 8 }}>
           <XAxis dataKey="month" tick={{ fontSize: 12 }} />
           <YAxis yAxisId="left" tick={{ fontSize: 12 }} allowDecimals={false} />
