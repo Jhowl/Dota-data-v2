@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDate, formatNumber, formatPercent } from '@/lib/format';
 import { createHeroImageResolver } from '@/lib/hero';
+import { getPatchStaticParams } from '@/lib/static-params';
 import { getHeroes, getLeagues, getMatchesByPatch, getPatchBySlug, getTeams, getTopPerformersByPatch } from '@/lib/supabase/queries';
 
 interface PatchPageProps {
@@ -13,6 +14,10 @@ interface PatchPageProps {
 }
 
 const formatMinutes = (seconds: number) => `${(seconds / 60).toFixed(1)} min`;
+
+export async function generateStaticParams() {
+    return getPatchStaticParams();
+}
 
 export async function generateMetadata({ params }: PatchPageProps) {
     const { patch } = await params;

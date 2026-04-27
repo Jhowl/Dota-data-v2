@@ -6,6 +6,7 @@ import { HandicapTable } from '@/components/handicap-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { formatNumber, formatPercent } from '@/lib/format';
+import { getPatchStaticParams } from '@/lib/static-params';
 import { getMatchesByPatch, getPatchBySlug, getTeamsByIds } from '@/lib/supabase/queries';
 import type { Match, Team } from '@/lib/types';
 
@@ -153,6 +154,10 @@ const TeamSummaryCard = ({ data }: { data: TeamHandicapData }) => (
 );
 
 export const revalidate = 86400;
+
+export async function generateStaticParams() {
+    return getPatchStaticParams();
+}
 
 export async function generateMetadata({ params }: PatchHandicapPageProps) {
     const { patch } = await params;

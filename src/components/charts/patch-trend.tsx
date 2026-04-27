@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { ClientChartFrame } from "@/components/charts/client-chart-frame";
 import { Patch } from "@/lib/types";
 
 interface PatchTrendProps {
@@ -48,7 +49,7 @@ function PatchTrendChart({ patches, stats }: PatchTrendProps) {
   const showDots = data.length <= 32;
 
   return (
-    <div className="h-[280px] min-w-0">
+    <ClientChartFrame className="h-[280px] min-w-0">
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <LineChart data={data} margin={{ left: 8, right: 8 }}>
           <XAxis dataKey="name" tick={{ fontSize: 12 }} />
@@ -79,7 +80,7 @@ function PatchTrendChart({ patches, stats }: PatchTrendProps) {
           />
         </LineChart>
       </ResponsiveContainer>
-    </div>
+    </ClientChartFrame>
   );
 }
 

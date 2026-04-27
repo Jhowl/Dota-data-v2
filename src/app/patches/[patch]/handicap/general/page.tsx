@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { HandicapGeneralTable } from '@/components/handicap-general-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { getPatchStaticParams } from '@/lib/static-params';
 import { getMatchesByPatch, getPatchBySlug, getTeamsByIds } from '@/lib/supabase/queries';
 import type { Match, Team } from '@/lib/types';
 
@@ -113,6 +114,10 @@ const accumulateMatchForTeam = (
 };
 
 export const revalidate = 86400;
+
+export async function generateStaticParams() {
+    return getPatchStaticParams();
+}
 
 export async function generateMetadata({ params }: PatchHandicapGeneralPageProps) {
     const { patch } = await params;

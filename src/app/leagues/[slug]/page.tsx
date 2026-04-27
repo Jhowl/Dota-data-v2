@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { createHeroImageResolver } from "@/lib/hero";
+import { getLeagueStaticParams } from "@/lib/static-params";
 import {
   getLeagueBySlug,
   getHeroes,
@@ -23,6 +24,10 @@ interface LeaguePageProps {
 }
 
 const formatMinutes = (seconds: number) => `${(seconds / 60).toFixed(1)} min`;
+
+export async function generateStaticParams() {
+  return getLeagueStaticParams();
+}
 
 export async function generateMetadata({ params }: LeaguePageProps) {
   const { slug } = await params;

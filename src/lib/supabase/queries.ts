@@ -1,7 +1,32 @@
 import { cache } from 'react';
+import { withRedisCache } from '@/lib/cache/redis';
 import { leagues as mockLeagues, matches as mockMatches, patches as mockPatches, teams as mockTeams } from '@/lib/data/mock';
 import { supabase } from '@/lib/supabase/client';
 import { Hero, League, Match, Patch, PickBanEntry, PickBanStat, Team } from '@/lib/types';
+
+const supabaseClient = supabase as NonNullable<typeof supabase>;
+const HOUR_IN_SECONDS = 60 * 60;
+const SIX_HOURS_IN_SECONDS = HOUR_IN_SECONDS * 6;
+const DAY_IN_SECONDS = HOUR_IN_SECONDS * 24;
+
+const normalizeIds = (values: Array<string | number | bigint | null | undefined>) =>
+    Array.from(
+        new Set(
+            values
+                .map((value) => {
+                    if (typeof value === 'string') {
+                        return value.trim();
+                    }
+                    if (typeof value === 'number' || typeof value === 'bigint') {
+                        return String(value);
+                    }
+                    return '';
+                })
+                .filter(Boolean),
+        ),
+    ).sort((left, right) => left.localeCompare(right));
+
+const encodeCachePart = (value: string | number) => encodeURIComponent(String(value));
 
 const mapLeague = (row: Record<string, unknown>): League => ({
     id: String(row.league_id ?? row.id ?? ''),
@@ -60,19 +85,21 @@ export async function getCounts(): Promise<{ leagues: number; teams: number; mat
         };
     }
 
-    const [leagueResult, teamResult, matchResult, heroResult] = await Promise.all([
-        supabase.from('leagues').select('league_id', { count: 'exact', head: true }),
-        supabase.from('teams').select('team_id', { count: 'exact', head: true }),
-        supabase.from('matches').select('match_id', { count: 'exact', head: true }),
-        supabase.from('heroes').select('id', { count: 'exact', head: true }),
-    ]);
+    return withRedisCache('counts', DAY_IN_SECONDS, async () => {
+        const [leagueResult, teamResult, matchResult, heroResult] = await Promise.all([
+            supabaseClient.from('leagues').select('league_id', { count: 'exact', head: true }),
+            supabaseClient.from('teams').select('team_id', { count: 'exact', head: true }),
+            supabaseClient.from('matches').select('match_id', { count: 'exact', head: true }),
+            supabaseClient.from('heroes').select('id', { count: 'exact', head: true }),
+        ]);
 
-    return {
-        leagues: leagueResult.count ?? 0,
-        teams: teamResult.count ?? 0,
-        matches: matchResult.count ?? 0,
-        heroes: heroResult.count ?? 0,
-    };
+        return {
+            leagues: leagueResult.count ?? 0,
+            teams: teamResult.count ?? 0,
+            matches: matchResult.count ?? 0,
+            heroes: heroResult.count ?? 0,
+        };
+    });
 }
 
 export async function getLeagues(): Promise<League[]> {
@@ -80,13 +107,15 @@ export async function getLeagues(): Promise<League[]> {
         return mockLeagues;
     }
 
-    const { data, error } = await supabase.from('leagues').select('*').order('start_date', { ascending: false });
+    return withRedisCache('leagues', DAY_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('leagues').select('*').order('start_date', { ascending: false });
 
-    if (error || !data) {
-        return mockLeagues;
-    }
+        if (error || !data) {
+            return mockLeagues;
+        }
 
-    return data.map((row) => mapLeague(row as Record<string, unknown>));
+        return data.map((row) => mapLeague(row as Record<string, unknown>));
+    });
 }
 
 export async function getLeagueBySlug(slug: string): Promise<League | null> {
@@ -102,21 +131,23 @@ export async function getLeagueBySlug(slug: string): Promise<League | null> {
     const idMatch = trimmedSlug.match(/-(\d+)$/);
     const leagueId = /^\d+$/.test(trimmedSlug) ? trimmedSlug : idMatch ? idMatch[1] : null;
 
-    if (leagueId) {
-        const { data, error } = await supabase.from('leagues').select('*').eq('league_id', leagueId).maybeSingle();
+    return withRedisCache(`league:${encodeCachePart(trimmedSlug)}`, DAY_IN_SECONDS, async () => {
+        if (leagueId) {
+            const { data, error } = await supabaseClient.from('leagues').select('*').eq('league_id', leagueId).maybeSingle();
 
-        if (!error && data) {
-            return mapLeague(data as Record<string, unknown>);
+            if (!error && data) {
+                return mapLeague(data as Record<string, unknown>);
+            }
         }
-    }
 
-    const { data, error } = await supabase.from('leagues').select('*').eq('slug', trimmedSlug).maybeSingle();
+        const { data, error } = await supabaseClient.from('leagues').select('*').eq('slug', trimmedSlug).maybeSingle();
 
-    if (error || !data) {
-        return mockLeagues.find((league) => league.slug === slug) ?? null;
-    }
+        if (error || !data) {
+            return mockLeagues.find((league) => league.slug === slug) ?? null;
+        }
 
-    return mapLeague(data as Record<string, unknown>);
+        return mapLeague(data as Record<string, unknown>);
+    });
 }
 
 export async function getTeams(): Promise<Team[]> {
@@ -124,55 +155,57 @@ export async function getTeams(): Promise<Team[]> {
         return mockTeams;
     }
 
-    const { data, error } = await supabase.from('teams').select('*').order('name', { ascending: true });
+    return withRedisCache('teams', DAY_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('teams').select('*').order('name', { ascending: true });
 
-    if (error || !data) {
-        return mockTeams;
-    }
-
-    const teams = data.map((row) => mapTeam(row as Record<string, unknown>));
-    const teamIds = new Set(teams.map((team) => team.id));
-    const latestMatchByTeam = new Map<string, number>();
-
-    const pageSize = 1000;
-    let from = 0;
-
-    while (latestMatchByTeam.size < teamIds.size) {
-        const { data: matchRows, error: matchError } = await supabase
-            .from('matches')
-            .select('start_time,radiant_team_id,dire_team_id')
-            .order('start_time', { ascending: false })
-            .range(from, from + pageSize - 1);
-
-        if (matchError || !matchRows?.length) {
-            break;
+        if (error || !data) {
+            return mockTeams;
         }
 
-        (matchRows as Array<Record<string, unknown>>).forEach((row) => {
-            const timeValue = Date.parse(String(row.start_time ?? ''));
-            const radiantId = row.radiant_team_id ? String(row.radiant_team_id) : null;
-            const direId = row.dire_team_id ? String(row.dire_team_id) : null;
+        const teams = data.map((row) => mapTeam(row as Record<string, unknown>));
+        const teamIds = new Set(teams.map((team) => team.id));
+        const latestMatchByTeam = new Map<string, number>();
 
-            if (radiantId && teamIds.has(radiantId) && !latestMatchByTeam.has(radiantId) && Number.isFinite(timeValue)) {
-                latestMatchByTeam.set(radiantId, timeValue);
+        const pageSize = 1000;
+        let from = 0;
+
+        while (latestMatchByTeam.size < teamIds.size) {
+            const { data: matchRows, error: matchError } = await supabaseClient
+                .from('matches')
+                .select('start_time,radiant_team_id,dire_team_id')
+                .order('start_time', { ascending: false })
+                .range(from, from + pageSize - 1);
+
+            if (matchError || !matchRows?.length) {
+                break;
             }
-            if (direId && teamIds.has(direId) && !latestMatchByTeam.has(direId) && Number.isFinite(timeValue)) {
-                latestMatchByTeam.set(direId, timeValue);
-            }
+
+            (matchRows as Array<Record<string, unknown>>).forEach((row) => {
+                const timeValue = Date.parse(String(row.start_time ?? ''));
+                const radiantId = row.radiant_team_id ? String(row.radiant_team_id) : null;
+                const direId = row.dire_team_id ? String(row.dire_team_id) : null;
+
+                if (radiantId && teamIds.has(radiantId) && !latestMatchByTeam.has(radiantId) && Number.isFinite(timeValue)) {
+                    latestMatchByTeam.set(radiantId, timeValue);
+                }
+                if (direId && teamIds.has(direId) && !latestMatchByTeam.has(direId) && Number.isFinite(timeValue)) {
+                    latestMatchByTeam.set(direId, timeValue);
+                }
+            });
+
+            from += pageSize;
+        }
+
+        return teams.sort((a, b) => {
+            const timeA = latestMatchByTeam.get(a.id) ?? 0;
+            const timeB = latestMatchByTeam.get(b.id) ?? 0;
+            return timeB - timeA;
         });
-
-        from += pageSize;
-    }
-
-    return teams.sort((a, b) => {
-        const timeA = latestMatchByTeam.get(a.id) ?? 0;
-        const timeB = latestMatchByTeam.get(b.id) ?? 0;
-        return timeB - timeA;
     });
 }
 
 export async function getTeamsByIds(teamIds: string[]): Promise<Team[]> {
-    const uniqueTeamIds = Array.from(new Set(teamIds.filter(Boolean)));
+    const uniqueTeamIds = normalizeIds(teamIds);
     if (!uniqueTeamIds.length) {
         return [];
     }
@@ -181,13 +214,15 @@ export async function getTeamsByIds(teamIds: string[]): Promise<Team[]> {
         return mockTeams.filter((team) => uniqueTeamIds.includes(team.id));
     }
 
-    const { data, error } = await supabase.from('teams').select('*').in('team_id', uniqueTeamIds);
+    return withRedisCache(`teams:${uniqueTeamIds.map(encodeCachePart).join(',')}`, DAY_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('teams').select('*').in('team_id', uniqueTeamIds);
 
-    if (error || !data) {
-        return [];
-    }
+        if (error || !data) {
+            return [];
+        }
 
-    return data.map((row) => mapTeam(row as Record<string, unknown>)).sort((a, b) => a.name.localeCompare(b.name));
+        return data.map((row) => mapTeam(row as Record<string, unknown>)).sort((a, b) => a.name.localeCompare(b.name));
+    });
 }
 
 export async function getTeamBySlug(slug: string): Promise<Team | null> {
@@ -195,13 +230,17 @@ export async function getTeamBySlug(slug: string): Promise<Team | null> {
         return mockTeams.find((team) => team.slug === slug) ?? null;
     }
 
-    const { data, error } = await supabase.from('teams').select('*').eq('slug', slug).maybeSingle();
+    const trimmedSlug = slug.trim();
 
-    if (error || !data) {
-        return mockTeams.find((team) => team.slug === slug) ?? null;
-    }
+    return withRedisCache(`team:${encodeCachePart(trimmedSlug)}`, DAY_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('teams').select('*').eq('slug', trimmedSlug).maybeSingle();
 
-    return mapTeam(data as Record<string, unknown>);
+        if (error || !data) {
+            return mockTeams.find((team) => team.slug === slug) ?? null;
+        }
+
+        return mapTeam(data as Record<string, unknown>);
+    });
 }
 
 export async function getPatches(): Promise<Patch[]> {
@@ -209,13 +248,15 @@ export async function getPatches(): Promise<Patch[]> {
         return mockPatches;
     }
 
-    const { data, error } = await supabase.from('patch').select('*').order('id', { ascending: false });
+    return withRedisCache('patches', DAY_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('patch').select('*').order('id', { ascending: false });
 
-    if (error || !data) {
-        return mockPatches;
-    }
+        if (error || !data) {
+            return mockPatches;
+        }
 
-    return data.map((row) => mapPatch(row as Record<string, unknown>));
+        return data.map((row) => mapPatch(row as Record<string, unknown>));
+    });
 }
 
 export const getPatchTrendStats = cache(async (): Promise<Array<{ patchId: string; matches: number; avgDuration: number }>> => {
@@ -240,7 +281,7 @@ export const getPatchTrendStats = cache(async (): Promise<Array<{ patchId: strin
     let from = 0;
 
     while (true) {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('matches')
             .select('patch_id,duration')
             .range(from, from + pageSize - 1);
@@ -288,21 +329,23 @@ export async function getPatchesWithCounts(): Promise<PatchWithCount[]> {
         }));
     }
 
-    const { data, error } = await supabase.from('patch').select('id,patch,matches(count)').order('id', { ascending: false });
+    return withRedisCache('patches:with-counts', DAY_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('patch').select('id,patch,matches(count)').order('id', { ascending: false });
 
-    if (error || !data) {
-        return [];
-    }
+        if (error || !data) {
+            return [];
+        }
 
-    return data.map((row) => {
-        const record = row as Record<string, unknown>;
-        const matches = Array.isArray(record.matches) ? (record.matches as Array<Record<string, unknown>>) : [];
-        const matchCount = matches[0]?.count ? Number(matches[0].count) : 0;
-        return {
-            id: String(record.id ?? ''),
-            patch: String(record.patch ?? ''),
-            matchCount,
-        };
+        return data.map((row) => {
+            const record = row as Record<string, unknown>;
+            const matches = Array.isArray(record.matches) ? (record.matches as Array<Record<string, unknown>>) : [];
+            const matchCount = matches[0]?.count ? Number(matches[0].count) : 0;
+            return {
+                id: String(record.id ?? ''),
+                patch: String(record.patch ?? ''),
+                matchCount,
+            };
+        });
     });
 }
 
@@ -310,11 +353,15 @@ export async function getPatchBySlug(patchSlug: string): Promise<Patch | null> {
     if (!supabase || !patchSlug) {
         return null;
     }
-    const { data, error } = await supabase.from('patch').select('*').eq('patch', patchSlug).maybeSingle();
-    if (error || !data) {
-        return null;
-    }
-    return mapPatch(data as Record<string, unknown>);
+
+    const trimmedPatchSlug = patchSlug.trim();
+    return withRedisCache(`patch:${encodeCachePart(trimmedPatchSlug)}`, DAY_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('patch').select('*').eq('patch', trimmedPatchSlug).maybeSingle();
+        if (error || !data) {
+            return null;
+        }
+        return mapPatch(data as Record<string, unknown>);
+    });
 }
 
 export async function getMatchesByPatch(patchId: string): Promise<Match[]> {
@@ -326,31 +373,33 @@ export async function getMatchesByPatch(patchId: string): Promise<Match[]> {
         return mockMatches.filter((match) => match.patchId === patchId);
     }
 
-    const results: Match[] = [];
-    const pageSize = 1000;
-    let from = 0;
+    return withRedisCache(`matches:patch:${encodeCachePart(patchId)}`, HOUR_IN_SECONDS, async () => {
+        const results: Match[] = [];
+        const pageSize = 1000;
+        let from = 0;
 
-    while (true) {
-        const { data, error } = await supabase
-            .from('matches')
-            .select('*')
-            .eq('patch_id', patchId)
-            .order('start_time', { ascending: false })
-            .range(from, from + pageSize - 1);
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('matches')
+                .select('*')
+                .eq('patch_id', patchId)
+                .order('start_time', { ascending: false })
+                .range(from, from + pageSize - 1);
 
-        if (error) {
-            break;
+            if (error) {
+                break;
+            }
+
+            if (!data?.length) {
+                break;
+            }
+
+            results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
+            from += pageSize;
         }
 
-        if (!data?.length) {
-            break;
-        }
-
-        results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
-        from += pageSize;
-    }
-
-    return results;
+        return results;
+    });
 }
 
 export async function getHeroes(): Promise<Hero[]> {
@@ -358,13 +407,15 @@ export async function getHeroes(): Promise<Hero[]> {
         return [];
     }
 
-    const { data, error } = await supabase.from('heroes').select('id, localized_name, name').order('id', { ascending: true });
+    return withRedisCache('heroes', DAY_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('heroes').select('id, localized_name, name').order('id', { ascending: true });
 
-    if (error || !data) {
-        return [];
-    }
+        if (error || !data) {
+            return [];
+        }
 
-    return data.map((row) => mapHero(row as Record<string, unknown>));
+        return data.map((row) => mapHero(row as Record<string, unknown>));
+    });
 }
 
 export async function getRecentMatches(limit = 8): Promise<Match[]> {
@@ -372,13 +423,15 @@ export async function getRecentMatches(limit = 8): Promise<Match[]> {
         return mockMatches.slice(0, limit);
     }
 
-    const { data, error } = await supabase.from('matches').select('*').order('start_time', { ascending: false }).limit(limit);
+    return withRedisCache(`matches:recent:${limit}`, HOUR_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('matches').select('*').order('start_time', { ascending: false }).limit(limit);
 
-    if (error || !data) {
-        return mockMatches.slice(0, limit);
-    }
+        if (error || !data) {
+            return mockMatches.slice(0, limit);
+        }
 
-    return data.map((row) => mapMatch(row as Record<string, unknown>));
+        return data.map((row) => mapMatch(row as Record<string, unknown>));
+    });
 }
 
 export type TopPerformer = {
@@ -407,116 +460,146 @@ export type LeagueTeamParticipation = {
     mostPickedTotal: number;
 };
 
-export async function getTopPerformersByLeague(leagueId: string): Promise<TopPerformerStat[]> {
-    const stats = [
-        { key: 'kills', title: 'Most Kills', field: 'kills' },
-        { key: 'deaths', title: 'Most Deaths', field: 'deaths' },
-        { key: 'assists', title: 'Most Assists', field: 'assists' },
-        { key: 'gold', title: 'Most Gold', field: 'gold' },
-        { key: 'denies', title: 'Most Denies', field: 'denies' },
-        { key: 'hero_damage', title: 'Most Hero Damage', field: 'hero_damage' },
-        { key: 'last_hits', title: 'Most Last Hits', field: 'last_hits' },
-        { key: 'tower_damage', title: 'Most Tower Damage', field: 'tower_damage' },
-        { key: 'hero_healing', title: 'Most Healing', field: 'hero_healing' },
-    ];
+const TOP_PERFORMER_STATS = [
+    { key: 'kills', title: 'Most Kills', field: 'kills' },
+    { key: 'deaths', title: 'Most Deaths', field: 'deaths' },
+    { key: 'assists', title: 'Most Assists', field: 'assists' },
+    { key: 'gold', title: 'Most Gold', field: 'gold' },
+    { key: 'denies', title: 'Most Denies', field: 'denies' },
+    { key: 'hero_damage', title: 'Most Hero Damage', field: 'hero_damage' },
+    { key: 'last_hits', title: 'Most Last Hits', field: 'last_hits' },
+    { key: 'tower_damage', title: 'Most Tower Damage', field: 'tower_damage' },
+    { key: 'hero_healing', title: 'Most Healing', field: 'hero_healing' },
+] as const;
 
-    const client = supabase;
-    if (!client || !leagueId) {
-        return stats.map((stat) => ({ key: stat.key, title: stat.title, performer: null }));
+type TopPerformerField = (typeof TOP_PERFORMER_STATS)[number]['field'];
+
+const TOP_PERFORMER_ROW_SELECT =
+    'id,match_id,hero_id,team_id,account_id,kills,deaths,assists,gold,denies,hero_damage,last_hits,tower_damage,hero_healing';
+const TOP_PERFORMER_PAGE_SIZE = 5000;
+
+const emptyTopPerformerStats = (): TopPerformerStat[] =>
+    TOP_PERFORMER_STATS.map((stat) => ({ key: stat.key, title: stat.title, performer: null }));
+
+const readTopPerformerValue = (row: Record<string, unknown>, field: TopPerformerField): number => {
+    const value = row[field];
+    if (typeof value === 'number') {
+        return value;
+    }
+    if (typeof value === 'string' && value.trim()) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
     }
 
-    const results = await Promise.all(
-        stats.map(async (stat) => {
-            const { data, error } = await client
-                .from('player_matches')
-                .select(`match_id,hero_id,team_id,account_id,kills,deaths,assists,${stat.field},matches!inner(league_id)`)
-                .eq('matches.league_id', leagueId)
-                .not(stat.field, 'is', null)
-                .gt(stat.field, 0)
-                .order(stat.field, { ascending: false })
-                .limit(1);
+    return 0;
+};
 
-            if (error || !data?.length) {
-                return { key: stat.key, title: stat.title, performer: null };
+const toTopPerformerStat = (row: Record<string, unknown>, field: TopPerformerField, key: string, title: string): TopPerformerStat => ({
+    key,
+    title,
+    performer: {
+        matchId: String(row.match_id ?? ''),
+        heroId: row.hero_id ? String(row.hero_id) : null,
+        teamId: row.team_id ? String(row.team_id) : null,
+        accountId: row.account_id ? String(row.account_id) : null,
+        statValue: readTopPerformerValue(row, field),
+        kills: Number(row.kills ?? 0),
+        deaths: Number(row.deaths ?? 0),
+        assists: Number(row.assists ?? 0),
+    },
+});
+
+const summarizeTopPerformers = (rows: Array<Record<string, unknown>>): TopPerformerStat[] => {
+    const topRows = new Map<TopPerformerField, Record<string, unknown>>();
+
+    rows.forEach((row) => {
+        TOP_PERFORMER_STATS.forEach((stat) => {
+            const value = readTopPerformerValue(row, stat.field);
+            if (!Number.isFinite(value) || value <= 0) {
+                return;
             }
 
-            const rows = data as unknown as Array<Record<string, unknown>>;
-            const row = rows[0];
+            const current = topRows.get(stat.field);
+            if (!current || value > readTopPerformerValue(current, stat.field)) {
+                topRows.set(stat.field, row);
+            }
+        });
+    });
 
-            return {
-                key: stat.key,
-                title: stat.title,
-                performer: {
-                    matchId: String(row.match_id ?? ''),
-                    heroId: row.hero_id ? String(row.hero_id) : null,
-                    teamId: row.team_id ? String(row.team_id) : null,
-                    accountId: row.account_id ? String(row.account_id) : null,
-                    statValue: Number(row[stat.field] ?? 0),
-                    kills: Number(row.kills ?? 0),
-                    deaths: Number(row.deaths ?? 0),
-                    assists: Number(row.assists ?? 0),
-                },
-            };
-        }),
-    );
+    return TOP_PERFORMER_STATS.map((stat) => {
+        const row = topRows.get(stat.field);
+        if (!row) {
+            return { key: stat.key, title: stat.title, performer: null };
+        }
 
-    return results;
+        return toTopPerformerStat(row, stat.field, stat.key, stat.title);
+    });
+};
+
+const collectTopPerformerRows = async (
+    loadPage: (from: number, to: number) => Promise<{ data: unknown[] | null; error: unknown }>,
+): Promise<Array<Record<string, unknown>>> => {
+    const rows: Array<Record<string, unknown>> = [];
+    let from = 0;
+
+    while (true) {
+        const to = from + TOP_PERFORMER_PAGE_SIZE - 1;
+        const { data, error } = await loadPage(from, to);
+
+        if (error || !data?.length) {
+            break;
+        }
+
+        rows.push(...(data as Array<Record<string, unknown>>));
+
+        if (data.length < TOP_PERFORMER_PAGE_SIZE) {
+            break;
+        }
+
+        from += TOP_PERFORMER_PAGE_SIZE;
+    }
+
+    return rows;
+};
+
+export async function getTopPerformersByLeague(leagueId: string): Promise<TopPerformerStat[]> {
+    const client = supabase;
+    if (!client || !leagueId) {
+        return emptyTopPerformerStats();
+    }
+
+    return withRedisCache(`top-performers:league:${encodeCachePart(leagueId)}`, SIX_HOURS_IN_SECONDS, async () => {
+        const rows = await collectTopPerformerRows(async (from, to) =>
+            await client
+                .from('player_matches')
+                .select(`${TOP_PERFORMER_ROW_SELECT},matches!inner(league_id)`)
+                .eq('matches.league_id', leagueId)
+                .order('id', { ascending: true })
+                .range(from, to),
+        );
+
+        return summarizeTopPerformers(rows);
+    });
 }
 
 export async function getTopPerformersByTeam(teamId: string): Promise<TopPerformerStat[]> {
-    const stats = [
-        { key: 'kills', title: 'Most Kills', field: 'kills' },
-        { key: 'deaths', title: 'Most Deaths', field: 'deaths' },
-        { key: 'assists', title: 'Most Assists', field: 'assists' },
-        { key: 'gold', title: 'Most Gold', field: 'gold' },
-        { key: 'denies', title: 'Most Denies', field: 'denies' },
-        { key: 'hero_damage', title: 'Most Hero Damage', field: 'hero_damage' },
-        { key: 'last_hits', title: 'Most Last Hits', field: 'last_hits' },
-        { key: 'tower_damage', title: 'Most Tower Damage', field: 'tower_damage' },
-        { key: 'hero_healing', title: 'Most Healing', field: 'hero_healing' },
-    ];
-
     const client = supabase;
     if (!client || !teamId) {
-        return stats.map((stat) => ({ key: stat.key, title: stat.title, performer: null }));
+        return emptyTopPerformerStats();
     }
 
-    const results = await Promise.all(
-        stats.map(async (stat) => {
-            const { data, error } = await client
+    return withRedisCache(`top-performers:team:${encodeCachePart(teamId)}`, SIX_HOURS_IN_SECONDS, async () => {
+        const rows = await collectTopPerformerRows(async (from, to) =>
+            await client
                 .from('player_matches')
-                .select('match_id,hero_id,team_id,account_id,kills,deaths,assists,' + stat.field)
+                .select(TOP_PERFORMER_ROW_SELECT)
                 .eq('team_id', teamId)
-                .not(stat.field, 'is', null)
-                .gt(stat.field, 0)
-                .order(stat.field, { ascending: false })
-                .limit(1);
+                .order('id', { ascending: true })
+                .range(from, to),
+        );
 
-            if (error || !data?.length) {
-                return { key: stat.key, title: stat.title, performer: null };
-            }
-
-            const rows = data as unknown as Array<Record<string, unknown>>;
-            const row = rows[0];
-
-            return {
-                key: stat.key,
-                title: stat.title,
-                performer: {
-                    matchId: String(row.match_id ?? ''),
-                    heroId: row.hero_id ? String(row.hero_id) : null,
-                    teamId: row.team_id ? String(row.team_id) : null,
-                    accountId: row.account_id ? String(row.account_id) : null,
-                    statValue: Number(row[stat.field] ?? 0),
-                    kills: Number(row.kills ?? 0),
-                    deaths: Number(row.deaths ?? 0),
-                    assists: Number(row.assists ?? 0),
-                },
-            };
-        }),
-    );
-
-    return results;
+        return summarizeTopPerformers(rows);
+    });
 }
 
 export async function getLeagueTeamParticipation(leagueId: string): Promise<LeagueTeamParticipation[]> {
@@ -524,169 +607,135 @@ export async function getLeagueTeamParticipation(leagueId: string): Promise<Leag
         return [];
     }
 
-    const pageSize = 1000;
-    let from = 0;
-    const matchRows: Array<Record<string, unknown>> = [];
+    return withRedisCache(`league-team-participation:${encodeCachePart(leagueId)}`, SIX_HOURS_IN_SECONDS, async () => {
+        const pageSize = 1000;
+        let from = 0;
+        const matchRows: Array<Record<string, unknown>> = [];
 
-    while (true) {
-        const { data, error } = await supabase
-            .from('matches')
-            .select('radiant_team_id,dire_team_id,radiant_win')
-            .eq('league_id', leagueId)
-            .order('match_id', { ascending: false })
-            .range(from, from + pageSize - 1);
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('matches')
+                .select('radiant_team_id,dire_team_id,radiant_win')
+                .eq('league_id', leagueId)
+                .order('match_id', { ascending: false })
+                .range(from, from + pageSize - 1);
 
-        if (error) {
-            break;
-        }
-        if (!data?.length) {
-            break;
-        }
-        matchRows.push(...data);
-        from += pageSize;
-    }
-
-    const teamStats = new Map<string, { matches: number; wins: number }>();
-
-    matchRows.forEach((match) => {
-        const radiantId = match.radiant_team_id ? String(match.radiant_team_id) : null;
-        const direId = match.dire_team_id ? String(match.dire_team_id) : null;
-        const radiantWin = Boolean(match.radiant_win);
-
-        if (radiantId) {
-            const stats = teamStats.get(radiantId) ?? { matches: 0, wins: 0 };
-            stats.matches += 1;
-            if (radiantWin) {
-                stats.wins += 1;
+            if (error) {
+                break;
             }
-            teamStats.set(radiantId, stats);
+            if (!data?.length) {
+                break;
+            }
+            matchRows.push(...data);
+            from += pageSize;
         }
 
-        if (direId) {
-            const stats = teamStats.get(direId) ?? { matches: 0, wins: 0 };
-            stats.matches += 1;
-            if (!radiantWin) {
-                stats.wins += 1;
+        const teamStats = new Map<string, { matches: number; wins: number }>();
+
+        matchRows.forEach((match) => {
+            const radiantId = match.radiant_team_id ? String(match.radiant_team_id) : null;
+            const direId = match.dire_team_id ? String(match.dire_team_id) : null;
+            const radiantWin = Boolean(match.radiant_win);
+
+            if (radiantId) {
+                const stats = teamStats.get(radiantId) ?? { matches: 0, wins: 0 };
+                stats.matches += 1;
+                if (radiantWin) {
+                    stats.wins += 1;
+                }
+                teamStats.set(radiantId, stats);
             }
-            teamStats.set(direId, stats);
-        }
-    });
 
-    const heroStats = new Map<string, Map<string, number>>();
-    let heroFrom = 0;
-
-    while (true) {
-        const { data, error } = await supabase
-            .from('player_matches')
-            .select('id,team_id,hero_id,matches!inner(league_id)')
-            .eq('matches.league_id', leagueId)
-            .order('id', { ascending: true })
-            .range(heroFrom, heroFrom + pageSize - 1);
-
-        if (error) {
-            break;
-        }
-        if (!data?.length) {
-            break;
-        }
-
-        data.forEach((row) => {
-            const teamId = row.team_id ? String(row.team_id) : null;
-            const heroId = row.hero_id ? String(row.hero_id) : null;
-            if (!teamId || !heroId) {
-                return;
-            }
-            if (!heroStats.has(teamId)) {
-                heroStats.set(teamId, new Map());
-            }
-            const teamHeroes = heroStats.get(teamId);
-            if (!teamHeroes) {
-                return;
-            }
-            teamHeroes.set(heroId, (teamHeroes.get(heroId) ?? 0) + 1);
-        });
-
-        heroFrom += pageSize;
-    }
-
-    const participation: LeagueTeamParticipation[] = Array.from(teamStats.entries()).map(([teamId, stats]) => {
-        const heroes = heroStats.get(teamId) ?? new Map();
-        let topHeroId: string | null = null;
-        let topHeroCount = 0;
-        heroes.forEach((count, heroId) => {
-            if (count > topHeroCount) {
-                topHeroCount = count;
-                topHeroId = heroId;
+            if (direId) {
+                const stats = teamStats.get(direId) ?? { matches: 0, wins: 0 };
+                stats.matches += 1;
+                if (!radiantWin) {
+                    stats.wins += 1;
+                }
+                teamStats.set(direId, stats);
             }
         });
 
-        return {
-            teamId,
-            matchCount: stats.matches,
-            wins: stats.wins,
-            winrate: stats.matches ? Number(((stats.wins / stats.matches) * 100).toFixed(1)) : 0,
-            mostPickedHeroId: topHeroId,
-            mostPickedTotal: topHeroCount,
-        };
-    });
+        const heroStats = new Map<string, Map<string, number>>();
+        let heroFrom = 0;
 
-    return participation.sort((a, b) => b.matchCount - a.matchCount);
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('player_matches')
+                .select('id,team_id,hero_id,matches!inner(league_id)')
+                .eq('matches.league_id', leagueId)
+                .order('id', { ascending: true })
+                .range(heroFrom, heroFrom + pageSize - 1);
+
+            if (error) {
+                break;
+            }
+            if (!data?.length) {
+                break;
+            }
+
+            data.forEach((row) => {
+                const teamId = row.team_id ? String(row.team_id) : null;
+                const heroId = row.hero_id ? String(row.hero_id) : null;
+                if (!teamId || !heroId) {
+                    return;
+                }
+                if (!heroStats.has(teamId)) {
+                    heroStats.set(teamId, new Map());
+                }
+                const teamHeroes = heroStats.get(teamId);
+                if (!teamHeroes) {
+                    return;
+                }
+                teamHeroes.set(heroId, (teamHeroes.get(heroId) ?? 0) + 1);
+            });
+
+            heroFrom += pageSize;
+        }
+
+        const participation: LeagueTeamParticipation[] = Array.from(teamStats.entries()).map(([teamId, stats]) => {
+            const heroes = heroStats.get(teamId) ?? new Map();
+            let topHeroId: string | null = null;
+            let topHeroCount = 0;
+            heroes.forEach((count, heroId) => {
+                if (count > topHeroCount) {
+                    topHeroCount = count;
+                    topHeroId = heroId;
+                }
+            });
+
+            return {
+                teamId,
+                matchCount: stats.matches,
+                wins: stats.wins,
+                winrate: stats.matches ? Number(((stats.wins / stats.matches) * 100).toFixed(1)) : 0,
+                mostPickedHeroId: topHeroId,
+                mostPickedTotal: topHeroCount,
+            };
+        });
+
+        return participation.sort((a, b) => b.matchCount - a.matchCount);
+    });
 }
 
 export async function getTopPerformersByPatch(patchId: string): Promise<TopPerformerStat[]> {
-    const stats = [
-        { key: 'kills', title: 'Most Kills', field: 'kills' },
-        { key: 'deaths', title: 'Most Deaths', field: 'deaths' },
-        { key: 'assists', title: 'Most Assists', field: 'assists' },
-        { key: 'gold', title: 'Most Gold', field: 'gold' },
-        { key: 'denies', title: 'Most Denies', field: 'denies' },
-        { key: 'hero_damage', title: 'Most Hero Damage', field: 'hero_damage' },
-        { key: 'last_hits', title: 'Most Last Hits', field: 'last_hits' },
-        { key: 'tower_damage', title: 'Most Tower Damage', field: 'tower_damage' },
-        { key: 'hero_healing', title: 'Most Healing', field: 'hero_healing' },
-    ];
-
     const client = supabase;
     if (!client || !patchId) {
-        return stats.map((stat) => ({ key: stat.key, title: stat.title, performer: null }));
+        return emptyTopPerformerStats();
     }
 
-    const results = await Promise.all(
-        stats.map(async (stat) => {
-            const { data, error } = await client
+    return withRedisCache(`top-performers:patch:${encodeCachePart(patchId)}`, SIX_HOURS_IN_SECONDS, async () => {
+        const rows = await collectTopPerformerRows(async (from, to) =>
+            await client
                 .from('player_matches')
-                .select(`match_id,hero_id,team_id,account_id,kills,deaths,assists,${stat.field},matches!inner(patch_id)`)
+                .select(`${TOP_PERFORMER_ROW_SELECT},matches!inner(patch_id)`)
                 .eq('matches.patch_id', patchId)
-                .not(stat.field, 'is', null)
-                .gt(stat.field, 0)
-                .order(stat.field, { ascending: false })
-                .limit(1);
+                .order('id', { ascending: true })
+                .range(from, to),
+        );
 
-            if (error || !data?.length) {
-                return { key: stat.key, title: stat.title, performer: null };
-            }
-
-            const rows = data as unknown as Array<Record<string, unknown>>;
-            const row = rows[0];
-
-            return {
-                key: stat.key,
-                title: stat.title,
-                performer: {
-                    matchId: String(row.match_id ?? ''),
-                    heroId: row.hero_id ? String(row.hero_id) : null,
-                    teamId: row.team_id ? String(row.team_id) : null,
-                    accountId: row.account_id ? String(row.account_id) : null,
-                    statValue: Number(row[stat.field] ?? 0),
-                    kills: Number(row.kills ?? 0),
-                    deaths: Number(row.deaths ?? 0),
-                    assists: Number(row.assists ?? 0),
-                },
-            };
-        }),
-    );
-
-    return results;
+        return summarizeTopPerformers(rows);
+    });
 }
 
 export async function getMatchesByLeague(leagueId: string, limit = 10): Promise<Match[]> {
@@ -694,18 +743,20 @@ export async function getMatchesByLeague(leagueId: string, limit = 10): Promise<
         return mockMatches.filter((match) => match.leagueId === leagueId).slice(0, limit);
     }
 
-    const { data, error } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('league_id', leagueId)
-        .order('start_time', { ascending: false })
-        .limit(limit);
+    return withRedisCache(`matches:league:${encodeCachePart(leagueId)}:${limit}`, HOUR_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient
+            .from('matches')
+            .select('*')
+            .eq('league_id', leagueId)
+            .order('start_time', { ascending: false })
+            .limit(limit);
 
-    if (error || !data) {
-        return mockMatches.filter((match) => match.leagueId === leagueId).slice(0, limit);
-    }
+        if (error || !data) {
+            return mockMatches.filter((match) => match.leagueId === leagueId).slice(0, limit);
+        }
 
-    return data.map((row) => mapMatch(row as Record<string, unknown>));
+        return data.map((row) => mapMatch(row as Record<string, unknown>));
+    });
 }
 
 export async function getAllMatchesByLeague(leagueId: string): Promise<Match[]> {
@@ -717,33 +768,35 @@ export async function getAllMatchesByLeague(leagueId: string): Promise<Match[]> 
         return mockMatches.filter((match) => match.leagueId === leagueId);
     }
 
-    const results: Match[] = [];
-    const pageSize = 1000;
-    let from = 0;
+    return withRedisCache(`matches:league-all:${encodeCachePart(leagueId)}`, HOUR_IN_SECONDS, async () => {
+        const results: Match[] = [];
+        const pageSize = 1000;
+        let from = 0;
 
-    while (true) {
-        const { data, error } = await supabase
-            .from('matches')
-            .select(
-                'match_id,league_id,start_time,dire_score,radiant_score,radiant_win,series_id,series_type,radiant_team_id,dire_team_id,patch_id,duration',
-            )
-            .eq('league_id', leagueId)
-            .order('start_time', { ascending: false })
-            .range(from, from + pageSize - 1);
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('matches')
+                .select(
+                    'match_id,league_id,start_time,dire_score,radiant_score,radiant_win,series_id,series_type,radiant_team_id,dire_team_id,patch_id,duration',
+                )
+                .eq('league_id', leagueId)
+                .order('start_time', { ascending: false })
+                .range(from, from + pageSize - 1);
 
-        if (error) {
-            break;
+            if (error) {
+                break;
+            }
+
+            if (!data?.length) {
+                break;
+            }
+
+            results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
+            from += pageSize;
         }
 
-        if (!data?.length) {
-            break;
-        }
-
-        results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
-        from += pageSize;
-    }
-
-    return results;
+        return results;
+    });
 }
 
 export async function getMatchesByTeam(teamId: string, limit = 10): Promise<Match[]> {
@@ -751,18 +804,20 @@ export async function getMatchesByTeam(teamId: string, limit = 10): Promise<Matc
         return mockMatches.filter((match) => match.radiantTeamId === teamId || match.direTeamId === teamId).slice(0, limit);
     }
 
-    const { data, error } = await supabase
-        .from('matches')
-        .select('*')
-        .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`)
-        .order('start_time', { ascending: false })
-        .limit(limit);
+    return withRedisCache(`matches:team:${encodeCachePart(teamId)}:${limit}`, HOUR_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient
+            .from('matches')
+            .select('*')
+            .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`)
+            .order('start_time', { ascending: false })
+            .limit(limit);
 
-    if (error || !data) {
-        return mockMatches.filter((match) => match.radiantTeamId === teamId || match.direTeamId === teamId).slice(0, limit);
-    }
+        if (error || !data) {
+            return mockMatches.filter((match) => match.radiantTeamId === teamId || match.direTeamId === teamId).slice(0, limit);
+        }
 
-    return data.map((row) => mapMatch(row as Record<string, unknown>));
+        return data.map((row) => mapMatch(row as Record<string, unknown>));
+    });
 }
 
 export async function getMatchesByTeamForHandicap(teamId: string): Promise<Match[]> {
@@ -774,84 +829,96 @@ export async function getMatchesByTeamForHandicap(teamId: string): Promise<Match
         return mockMatches.filter((match) => match.radiantTeamId === teamId || match.direTeamId === teamId);
     }
 
-    const results: Match[] = [];
-    const pageSize = 1000;
-    let from = 0;
+    return withRedisCache(`matches:team-handicap:${encodeCachePart(teamId)}`, HOUR_IN_SECONDS, async () => {
+        const results: Match[] = [];
+        const pageSize = 1000;
+        let from = 0;
 
-    while (true) {
-        const { data, error } = await supabase
-            .from('matches')
-            .select('match_id,league_id,radiant_team_id,dire_team_id,radiant_score,dire_score,radiant_win,patch_id')
-            .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`)
-            .order('match_id', { ascending: false })
-            .range(from, from + pageSize - 1);
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('matches')
+                .select('match_id,league_id,radiant_team_id,dire_team_id,radiant_score,dire_score,radiant_win,patch_id')
+                .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`)
+                .order('match_id', { ascending: false })
+                .range(from, from + pageSize - 1);
 
-        if (error) {
-            break;
+            if (error) {
+                break;
+            }
+
+            if (!data?.length) {
+                break;
+            }
+
+            results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
+            from += pageSize;
         }
 
-        if (!data?.length) {
-            break;
-        }
-
-        results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
-        from += pageSize;
-    }
-
-    return results;
+        return results;
+    });
 }
 
 export async function getMatchesByLeagueIds(leagueIds: string[]): Promise<Match[]> {
-    if (!leagueIds.length) {
+    const normalizedLeagueIds = normalizeIds(leagueIds);
+    if (!normalizedLeagueIds.length) {
         return [];
     }
 
     if (!supabase) {
-        return mockMatches.filter((match) => leagueIds.includes(match.leagueId));
+        return mockMatches.filter((match) => normalizedLeagueIds.includes(match.leagueId));
     }
 
-    const results: Match[] = [];
-    const pageSize = 1000;
-    let from = 0;
+    return withRedisCache(
+        `matches:league-ids:${normalizedLeagueIds.map(encodeCachePart).join(',')}`,
+        HOUR_IN_SECONDS,
+        async () => {
+            const results: Match[] = [];
+            const pageSize = 1000;
+            let from = 0;
 
-    while (true) {
-        const { data, error } = await supabase
-            .from('matches')
-            .select('*')
-            .in('league_id', leagueIds)
-            .order('start_time', { ascending: false })
-            .range(from, from + pageSize - 1);
+            while (true) {
+                const { data, error } = await supabaseClient
+                    .from('matches')
+                    .select('*')
+                    .in('league_id', normalizedLeagueIds)
+                    .order('start_time', { ascending: false })
+                    .range(from, from + pageSize - 1);
 
-        if (error) {
-            break;
-        }
+                if (error) {
+                    break;
+                }
 
-        if (!data?.length) {
-            break;
-        }
+                if (!data?.length) {
+                    break;
+                }
 
-        results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
-        from += pageSize;
-    }
+                results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
+                from += pageSize;
+            }
 
-    return results;
+            return results;
+        },
+    );
 }
 
 export async function getMatchesByIds(matchIds: string[]): Promise<Match[]> {
-    if (!matchIds.length) {
+    const normalizedMatchIds = normalizeIds(matchIds);
+    if (!normalizedMatchIds.length) {
         return [];
     }
 
     if (!supabase) {
-        return mockMatches.filter((match) => matchIds.includes(match.id));
+        return mockMatches.filter((match) => normalizedMatchIds.includes(match.id));
     }
 
-    const { data, error } = await supabase.from('matches').select('*').in('match_id', matchIds);
-    if (error || !data) {
-        return [];
-    }
+    return withRedisCache(`matches:ids:${normalizedMatchIds.map(encodeCachePart).join(',')}`, HOUR_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('matches').select('*').in('match_id', normalizedMatchIds);
+        if (error || !data) {
+            return [];
+        }
 
-    return data.map((row) => mapMatch(row as Record<string, unknown>));
+        return data.map((row) => mapMatch(row as Record<string, unknown>));
+    });
 }
 
 export async function getMatchesByYear(year: number): Promise<Match[]> {
@@ -866,69 +933,76 @@ export async function getMatchesByYear(year: number): Promise<Match[]> {
     const start = `${year}-01-01`;
     const end = `${year + 1}-01-01`;
 
-    const results: Match[] = [];
-    const pageSize = 1000;
-    let from = 0;
+    return withRedisCache(`matches:year:${year}`, HOUR_IN_SECONDS, async () => {
+        const results: Match[] = [];
+        const pageSize = 1000;
+        let from = 0;
 
-    while (true) {
-        const { data, error } = await supabase
-            .from('matches')
-            .select(
-                'match_id,league_id,duration,start_time,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,first_tower_time,patch_id,picks_bans,series_id,series_type',
-            )
-            .gte('start_time', start)
-            .lt('start_time', end)
-            .order('start_time', { ascending: true })
-            .range(from, from + pageSize - 1);
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('matches')
+                .select(
+                    'match_id,league_id,duration,start_time,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,first_tower_time,patch_id,picks_bans,series_id,series_type',
+                )
+                .gte('start_time', start)
+                .lt('start_time', end)
+                .order('start_time', { ascending: true })
+                .range(from, from + pageSize - 1);
 
+            if (error) {
+                console.error('Error fetching matches by year:', error);
+                break;
+            }
 
-        if (error) {
-            console.error('Error fetching matches by year:', error);
-            break;
+            if (!data?.length) {
+                break;
+            }
+
+            results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
+            from += pageSize;
         }
 
-        if (!data?.length) {
-            break;
-        }
-
-        results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
-        from += pageSize;
-    }
-
-    return results;
+        return results;
+    });
 }
 
 export async function getLeagueSummary(leagueId: string): Promise<LeagueSummary | null> {
     if (!supabase || !leagueId) {
         return null;
     }
-    const { data, error } = await supabase.from('league_snapshots').select('payload').eq('league_id', leagueId).maybeSingle();
-    if (error || !data?.payload) {
-        return null;
-    }
-    return data.payload as LeagueSummary;
+    return withRedisCache(`league-summary:${encodeCachePart(leagueId)}`, DAY_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('league_snapshots').select('payload').eq('league_id', leagueId).maybeSingle();
+        if (error || !data?.payload) {
+            return null;
+        }
+        return data.payload as LeagueSummary;
+    });
 }
 
 export async function getTeamSummary(teamId: string): Promise<TeamSummary | null> {
     if (!supabase || !teamId) {
         return null;
     }
-    const { data, error } = await supabase.from('team_snapshots').select('payload').eq('team_id', teamId).maybeSingle();
-    if (error || !data?.payload) {
-        return null;
-    }
-    return data.payload as TeamSummary;
+    return withRedisCache(`team-summary:${encodeCachePart(teamId)}`, DAY_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('team_snapshots').select('payload').eq('team_id', teamId).maybeSingle();
+        if (error || !data?.payload) {
+            return null;
+        }
+        return data.payload as TeamSummary;
+    });
 }
 
 export async function getSeasonSnapshot(year: number): Promise<SeasonSnapshot | null> {
     if (!supabase || !year) {
         return null;
     }
-    const { data, error } = await supabase.from('season_snapshots').select('payload').eq('year', year).maybeSingle();
-    if (error || !data?.payload) {
-        return null;
-    }
-    return data.payload as SeasonSnapshot;
+    return withRedisCache(`season-snapshot:${year}`, DAY_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('season_snapshots').select('payload').eq('year', year).maybeSingle();
+        if (error || !data?.payload) {
+            return null;
+        }
+        return data.payload as SeasonSnapshot;
+    });
 }
 
 export type LeagueMatchStats = Record<string, { matches: number; teams: Set<string>; radiantWins: number }>;
@@ -1129,7 +1203,7 @@ export async function getLeagueMatchStats(): Promise<LeagueMatchStats> {
     let from = 0;
 
     while (true) {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('matches')
             .select('league_id,radiant_team_id,dire_team_id,radiant_win')
             .range(from, from + pageSize - 1);
@@ -1231,7 +1305,7 @@ export async function getTeamMatchStats(): Promise<TeamMatchStats> {
     let from = 0;
 
     while (true) {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('matches')
             .select('start_time,duration,radiant_score,dire_score,radiant_win,radiant_team_id,dire_team_id')
             .range(from, from + pageSize - 1);
@@ -1256,12 +1330,14 @@ export async function getLeagueSummaries(): Promise<LeagueSummary[]> {
         return [];
     }
 
-    const { data, error } = await supabase.from('league_snapshots').select('payload');
-    if (error || !data) {
-        return [];
-    }
+    return withRedisCache('league-summaries', DAY_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('league_snapshots').select('payload');
+        if (error || !data) {
+            return [];
+        }
 
-    return data.map((row) => row.payload as LeagueSummary).filter(Boolean);
+        return data.map((row) => row.payload as LeagueSummary).filter(Boolean);
+    });
 }
 
 export async function getTeamSummaries(): Promise<TeamSummary[]> {
@@ -1269,12 +1345,14 @@ export async function getTeamSummaries(): Promise<TeamSummary[]> {
         return [];
     }
 
-    const { data, error } = await supabase.from('team_snapshots').select('payload');
-    if (error || !data) {
-        return [];
-    }
+    return withRedisCache('team-summaries', DAY_IN_SECONDS, async () => {
+        const { data, error } = await supabaseClient.from('team_snapshots').select('payload');
+        if (error || !data) {
+            return [];
+        }
 
-    return data.map((row) => row.payload as TeamSummary).filter(Boolean);
+        return data.map((row) => row.payload as TeamSummary).filter(Boolean);
+    });
 }
 
 export async function getLeaguePickBanStats(
@@ -1311,33 +1389,35 @@ export async function getLeaguePickBanStats(
         };
     }
 
-    const pageSize = 1000;
-    let from = 0;
+    return withRedisCache(`pickban:league:${encodeCachePart(leagueId)}:${limit}`, SIX_HOURS_IN_SECONDS, async () => {
+        const pageSize = 1000;
+        let from = 0;
 
-    while (true) {
-        const { data, error } = await supabase
-            .from('matches')
-            .select('picks_bans')
-            .eq('league_id', leagueId)
-            .range(from, from + pageSize - 1);
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('matches')
+                .select('picks_bans')
+                .eq('league_id', leagueId)
+                .range(from, from + pageSize - 1);
 
-        if (error) {
-            break;
+            if (error) {
+                break;
+            }
+
+            if (!data?.length) {
+                break;
+            }
+
+            accumulate(data as Array<Record<string, unknown>>);
+            from += pageSize;
         }
 
-        if (!data?.length) {
-            break;
-        }
-
-        accumulate(data as Array<Record<string, unknown>>);
-        from += pageSize;
-    }
-
-    return {
-        mostPicked: bucketToSorted(mostPicked, limit),
-        mostBanned: bucketToSorted(mostBanned, limit),
-        mostContested: bucketToSorted(mostContested, limit),
-    };
+        return {
+            mostPicked: bucketToSorted(mostPicked, limit),
+            mostBanned: bucketToSorted(mostBanned, limit),
+            mostContested: bucketToSorted(mostContested, limit),
+        };
+    });
 }
 
 export async function getTeamPickBanStats(
@@ -1384,33 +1464,35 @@ export async function getTeamPickBanStats(
         };
     }
 
-    const pageSize = 1000;
-    let from = 0;
+    return withRedisCache(`pickban:team:${encodeCachePart(teamId)}:${limit}`, SIX_HOURS_IN_SECONDS, async () => {
+        const pageSize = 1000;
+        let from = 0;
 
-    while (true) {
-        const { data, error } = await supabase
-            .from('matches')
-            .select('picks_bans,radiant_team_id,dire_team_id')
-            .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`)
-            .range(from, from + pageSize - 1);
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('matches')
+                .select('picks_bans,radiant_team_id,dire_team_id')
+                .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`)
+                .range(from, from + pageSize - 1);
 
-        if (error) {
-            break;
+            if (error) {
+                break;
+            }
+
+            if (!data?.length) {
+                break;
+            }
+
+            accumulate(data as Array<Record<string, unknown>>);
+            from += pageSize;
         }
 
-        if (!data?.length) {
-            break;
-        }
-
-        accumulate(data as Array<Record<string, unknown>>);
-        from += pageSize;
-    }
-
-    return {
-        mostPicked: bucketToSorted(mostPicked, limit),
-        mostBanned: bucketToSorted(mostBanned, limit),
-        mostContested: bucketToSorted(mostContested, limit),
-    };
+        return {
+            mostPicked: bucketToSorted(mostPicked, limit),
+            mostBanned: bucketToSorted(mostBanned, limit),
+            mostContested: bucketToSorted(mostContested, limit),
+        };
+    });
 }
 
 export async function getMatchCountByLeague(leagueId: string): Promise<number> {
@@ -1418,9 +1500,11 @@ export async function getMatchCountByLeague(leagueId: string): Promise<number> {
         return mockMatches.filter((match) => match.leagueId === leagueId).length;
     }
 
-    const { count } = await supabase.from('matches').select('match_id', { count: 'exact', head: true }).eq('league_id', leagueId);
+    return withRedisCache(`match-count:league:${encodeCachePart(leagueId)}`, DAY_IN_SECONDS, async () => {
+        const { count } = await supabaseClient.from('matches').select('match_id', { count: 'exact', head: true }).eq('league_id', leagueId);
 
-    return count ?? 0;
+        return count ?? 0;
+    });
 }
 
 export async function getMatchCountByTeam(teamId: string): Promise<number> {
@@ -1428,10 +1512,12 @@ export async function getMatchCountByTeam(teamId: string): Promise<number> {
         return mockMatches.filter((match) => match.radiantTeamId === teamId || match.direTeamId === teamId).length;
     }
 
-    const { count } = await supabase
-        .from('matches')
-        .select('match_id', { count: 'exact', head: true })
-        .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`);
+    return withRedisCache(`match-count:team:${encodeCachePart(teamId)}`, DAY_IN_SECONDS, async () => {
+        const { count } = await supabaseClient
+            .from('matches')
+            .select('match_id', { count: 'exact', head: true })
+            .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`);
 
-    return count ?? 0;
+        return count ?? 0;
+    });
 }

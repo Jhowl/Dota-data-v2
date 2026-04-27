@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatNumber } from "@/lib/format";
+import { getTeamStaticParams } from "@/lib/static-params";
 import { getLeagues, getMatchesByTeamForHandicap, getPatches, getTeamBySlug } from "@/lib/supabase/queries";
 
 interface TeamHandicapPageProps {
@@ -76,6 +77,10 @@ const finalizePercentages = (stats: HandicapStats, handicapRange: string[]) => {
 };
 
 export const revalidate = 86400;
+
+export async function generateStaticParams() {
+  return getTeamStaticParams();
+}
 
 export async function generateMetadata({ params }: TeamHandicapPageProps) {
   const { slug } = await params;

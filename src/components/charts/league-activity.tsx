@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { ClientChartFrame } from "@/components/charts/client-chart-frame";
 import { League, Match } from "@/lib/types";
 
 interface LeagueActivityProps {
@@ -46,7 +47,7 @@ function LeagueActivityChart({ leagues, matches }: LeagueActivityProps) {
   }, [leagues, matches]);
 
   return (
-    <div className="h-[280px] min-w-0">
+    <ClientChartFrame className="h-[280px] min-w-0">
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <BarChart data={data} margin={{ left: 8, right: 8 }}>
           <CartesianGrid strokeDasharray="4 4" opacity={0.3} />
@@ -70,7 +71,7 @@ function LeagueActivityChart({ leagues, matches }: LeagueActivityProps) {
           <Bar dataKey="matches" fill="var(--primary)" radius={[8, 8, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </ClientChartFrame>
   );
 }
 
