@@ -1,11 +1,17 @@
 import type { MetadataRoute } from "next";
 
 import { getLeagues, getPatches, getTeams } from "@/lib/supabase/queries";
+import { getBlogPosts } from "@/lib/blog-posts";
 
 const baseUrl = "https://dotadata.com";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [leagues, teams, patches] = await Promise.all([getLeagues(), getTeams(), getPatches()]);
+  const [leagues, teams, patches, blogPosts] = await Promise.all([
+    getLeagues(),
+    getTeams(),
+    getPatches(),
+    getBlogPosts(),
+  ]);
   const now = new Date();
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: Math.max(0, currentYear - 2022) }, (_, index) => 2023 + index);
@@ -53,6 +59,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly",
       priority: 0.5,
     },
+    {
+      url: `${baseUrl}/blog`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.8,
+    },
+    ...blogPosts.map((post) => ({
+      url: `${baseUrl}/blog/${post.slug}`,
+      lastModified: new Date(post.publishedAt),
+      changeFrequency: "monthly" as const,
+      priority: 0.7,
+    })),
     ...years.map((year) => ({
       url: `${baseUrl}/seasons/${year}`,
       lastModified: now,
@@ -79,3 +97,4 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
   ];
 }
+

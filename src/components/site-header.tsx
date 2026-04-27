@@ -4,6 +4,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
+  { href: "/blog", label: "Blog" },
   { href: "/leagues", label: "Leagues" },
   { href: "/teams", label: "Teams" },
   { href: "/seasons", label: "Seasons" },
@@ -24,7 +25,12 @@ export function SiteHeader() {
         </Link>
         <nav className="hidden items-center gap-6 text-sm font-medium md:flex">
           {navItems.map((item) => (
-            <Link key={item.href} href={item.href} className="text-muted-foreground hover:text-foreground">
+            <Link
+              key={item.href}
+              href={item.href}
+              prefetch={false}
+              className="text-muted-foreground hover:text-foreground"
+            >
               {item.label}
             </Link>
           ))}

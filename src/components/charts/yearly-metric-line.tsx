@@ -11,6 +11,8 @@ import {
   YAxis,
 } from "recharts";
 
+import { ClientChartFrame } from "@/components/charts/client-chart-frame";
+
 interface YearlyMetricPoint {
   month: string;
   value: number;
@@ -33,7 +35,7 @@ function YearlyMetricLineChart({ data, color }: YearlyMetricLineProps) {
   const showDots = data.length <= 24;
 
   return (
-    <div className="h-[260px] min-w-0">
+    <ClientChartFrame className="h-[260px] min-w-0">
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <LineChart data={data} margin={{ left: 8, right: 8, top: 8 }}>
           <XAxis dataKey="month" tick={{ fontSize: 12 }} />
@@ -47,8 +49,9 @@ function YearlyMetricLineChart({ data, color }: YearlyMetricLineProps) {
           <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={showDots ? { r: 3 } : false} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
-    </div>
+    </ClientChartFrame>
   );
 }
 
 export const YearlyMetricLine = memo(YearlyMetricLineChart);
+export default YearlyMetricLine;

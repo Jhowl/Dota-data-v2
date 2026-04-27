@@ -85,3 +85,4 @@ function PatchTrendChart({ patches, stats }: PatchTrendProps) {
 }
 
 export const PatchTrend = memo(PatchTrendChart);
+export default PatchTrend;

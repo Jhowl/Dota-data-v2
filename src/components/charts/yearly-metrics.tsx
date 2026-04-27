@@ -11,6 +11,8 @@ import {
   YAxis,
 } from "recharts";
 
+import { ClientChartFrame } from "@/components/charts/client-chart-frame";
+
 interface YearlyMetricsPoint {
   month: string;
   avgDuration: number;
@@ -33,7 +35,7 @@ function YearlyMetricsChart({ data }: YearlyMetricsProps) {
   const showDots = data.length <= 24;
 
   return (
-    <div className="h-[320px] min-w-0">
+    <ClientChartFrame className="h-[320px] min-w-0">
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <LineChart data={data} margin={{ left: 8, right: 8, top: 8 }}>
           <XAxis dataKey="month" tick={{ fontSize: 12 }} />
@@ -64,8 +66,9 @@ function YearlyMetricsChart({ data }: YearlyMetricsProps) {
           />
         </LineChart>
       </ResponsiveContainer>
-    </div>
+    </ClientChartFrame>
   );
 }
 
 export const YearlyMetrics = memo(YearlyMetricsChart);
+export default YearlyMetrics;

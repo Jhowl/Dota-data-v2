@@ -1,17 +1,17 @@
 import Link from "next/link";
 
-import { HomeDashboardTable } from "@/components/home-dashboard-table";
-import { LeagueActivity } from "@/components/charts/league-activity";
-import { PatchTrend } from "@/components/charts/patch-trend";
-import { YearlyMetricLine } from "@/components/charts/yearly-metric-line";
-import { YearlyMetrics } from "@/components/charts/yearly-metrics";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { HomeDashboardTable } from "@/components/home-dashboard-table";
+import { LeagueActivity } from "@/components/charts/league-activity";
+import { YearlyMetrics } from "@/components/charts/yearly-metrics";
+import { YearlyMetricLine } from "@/components/charts/yearly-metric-line";
+import { PatchTrend } from "@/components/charts/patch-trend";
 import { StatCard } from "@/components/stat-card";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { summarizeMatches } from "@/lib/stats";
-import { getCounts, getLeagues, getPatches, getRecentMatches } from "@/lib/supabase/queries";
+import { getCounts, getLeagues, getMatchesByYear, getPatches } from "@/lib/supabase/queries";
 
 export const metadata = {
   title: "DotaData - Dota 2 Analytics Dashboard, Leagues & Match Insights",
@@ -56,18 +56,13 @@ export default async function HomePage() {
     getCounts(),
     getLeagues(),
     getPatches(),
-    getRecentMatches(2000),
+    getMatchesByYear(currentYear),
   ]);
 
   const leagueLookup = new Map(leagues.map((league) => [league.id, league]));
   const patchLookup = new Map(patches.map((patch) => [patch.id, patch]));
 
-  const yearMatches = matches.filter((match) => {
-    const year = new Date(match.startTime).getFullYear();
-    return Number.isFinite(year) && year === currentYear;
-  });
-
-  const yearSummary = summarizeMatches(yearMatches);
+  const yearSummary = summarizeMatches(matches);
 
   const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "short" });
   const monthlyBuckets = Array.from({ length: 12 }, (_, index) => ({
@@ -78,7 +73,7 @@ export default async function HomePage() {
     count: 0,
   }));
 
-  yearMatches.forEach((match) => {
+  matches.forEach((match) => {
     const parsed = new Date(match.startTime);
     if (Number.isNaN(parsed.getTime())) {
       return;
@@ -117,7 +112,7 @@ export default async function HomePage() {
     avgDuration: entry.matches ? entry.durationSum / entry.matches / 60 : 0,
   }));
 
-  const leagueStats = yearMatches.reduce<Record<string, { matches: number; durationSum: number; scoreSum: number; radiantWins: number }>>(
+  const leagueStats = matches.reduce<Record<string, { matches: number; durationSum: number; scoreSum: number; radiantWins: number }>>(
     (acc, match) => {
       const entry = acc[match.leagueId] ?? { matches: 0, durationSum: 0, scoreSum: 0, radiantWins: 0 };
       entry.matches += 1;
@@ -156,7 +151,7 @@ export default async function HomePage() {
     return Number.isNaN(parsed) ? 0 : parsed;
   };
 
-  const latestMatch = yearMatches.reduce<typeof yearMatches[number] | null>((acc, match) => {
+  const latestMatch = matches.reduce<typeof matches[number] | null>((acc, match) => {
     if (!acc) {
       return match;
     }
@@ -338,7 +333,7 @@ export default async function HomePage() {
               <p className="text-sm text-muted-foreground">Match volume across active leagues.</p>
             </CardHeader>
             <CardContent>
-              <LeagueActivity leagues={leagues} matches={yearMatches} />
+              <LeagueActivity leagues={leagues} matches={matches} />
             </CardContent>
           </Card>
         </div>
@@ -355,7 +350,7 @@ export default async function HomePage() {
             <p className="text-sm text-muted-foreground">Sortable metrics for the most active leagues.</p>
           </CardHeader>
           <CardContent>
-            <HomeDashboardTable rows={leagueRows} />
+              <HomeDashboardTable rows={leagueRows} />
           </CardContent>
         </Card>
       </section>

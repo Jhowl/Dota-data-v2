@@ -108,7 +108,10 @@ export async function getLeagues(): Promise<League[]> {
     }
 
     return withRedisCache('leagues', DAY_IN_SECONDS, async () => {
-        const { data, error } = await supabaseClient.from('leagues').select('*').order('start_date', { ascending: false });
+        const { data, error } = await supabaseClient
+            .from('leagues')
+            .select('league_id,slug,name,start_date,end_date')
+            .order('start_date', { ascending: false });
 
         if (error || !data) {
             return mockLeagues;
@@ -133,14 +136,22 @@ export async function getLeagueBySlug(slug: string): Promise<League | null> {
 
     return withRedisCache(`league:${encodeCachePart(trimmedSlug)}`, DAY_IN_SECONDS, async () => {
         if (leagueId) {
-            const { data, error } = await supabaseClient.from('leagues').select('*').eq('league_id', leagueId).maybeSingle();
+            const { data, error } = await supabaseClient
+                .from('leagues')
+                .select('league_id,slug,name,start_date,end_date')
+                .eq('league_id', leagueId)
+                .maybeSingle();
 
             if (!error && data) {
                 return mapLeague(data as Record<string, unknown>);
             }
         }
 
-        const { data, error } = await supabaseClient.from('leagues').select('*').eq('slug', trimmedSlug).maybeSingle();
+        const { data, error } = await supabaseClient
+            .from('leagues')
+            .select('league_id,slug,name,start_date,end_date')
+            .eq('slug', trimmedSlug)
+            .maybeSingle();
 
         if (error || !data) {
             return mockLeagues.find((league) => league.slug === slug) ?? null;
@@ -156,7 +167,10 @@ export async function getTeams(): Promise<Team[]> {
     }
 
     return withRedisCache('teams', DAY_IN_SECONDS, async () => {
-        const { data, error } = await supabaseClient.from('teams').select('*').order('name', { ascending: true });
+        const { data, error } = await supabaseClient
+            .from('teams')
+            .select('team_id,slug,name,logo_url')
+            .order('name', { ascending: true });
 
         if (error || !data) {
             return mockTeams;
@@ -215,7 +229,7 @@ export async function getTeamsByIds(teamIds: string[]): Promise<Team[]> {
     }
 
     return withRedisCache(`teams:${uniqueTeamIds.map(encodeCachePart).join(',')}`, DAY_IN_SECONDS, async () => {
-        const { data, error } = await supabaseClient.from('teams').select('*').in('team_id', uniqueTeamIds);
+        const { data, error } = await supabaseClient.from('teams').select('team_id,slug,name,logo_url').in('team_id', uniqueTeamIds);
 
         if (error || !data) {
             return [];
@@ -233,7 +247,11 @@ export async function getTeamBySlug(slug: string): Promise<Team | null> {
     const trimmedSlug = slug.trim();
 
     return withRedisCache(`team:${encodeCachePart(trimmedSlug)}`, DAY_IN_SECONDS, async () => {
-        const { data, error } = await supabaseClient.from('teams').select('*').eq('slug', trimmedSlug).maybeSingle();
+        const { data, error } = await supabaseClient
+            .from('teams')
+            .select('team_id,slug,name,logo_url')
+            .eq('slug', trimmedSlug)
+            .maybeSingle();
 
         if (error || !data) {
             return mockTeams.find((team) => team.slug === slug) ?? null;
@@ -249,7 +267,7 @@ export async function getPatches(): Promise<Patch[]> {
     }
 
     return withRedisCache('patches', DAY_IN_SECONDS, async () => {
-        const { data, error } = await supabaseClient.from('patch').select('*').order('id', { ascending: false });
+        const { data, error } = await supabaseClient.from('patch').select('id,patch').order('id', { ascending: false });
 
         if (error || !data) {
             return mockPatches;
@@ -356,7 +374,7 @@ export async function getPatchBySlug(patchSlug: string): Promise<Patch | null> {
 
     const trimmedPatchSlug = patchSlug.trim();
     return withRedisCache(`patch:${encodeCachePart(trimmedPatchSlug)}`, DAY_IN_SECONDS, async () => {
-        const { data, error } = await supabaseClient.from('patch').select('*').eq('patch', trimmedPatchSlug).maybeSingle();
+        const { data, error } = await supabaseClient.from('patch').select('id,patch').eq('patch', trimmedPatchSlug).maybeSingle();
         if (error || !data) {
             return null;
         }
@@ -381,7 +399,9 @@ export async function getMatchesByPatch(patchId: string): Promise<Match[]> {
         while (true) {
             const { data, error } = await supabaseClient
                 .from('matches')
-                .select('*')
+                .select(
+                    'match_id,league_id,start_time,duration,dire_score,radiant_score,radiant_win,series_id,series_type,radiant_team_id,dire_team_id,first_tower_time,patch_id,picks_bans',
+                )
                 .eq('patch_id', patchId)
                 .order('start_time', { ascending: false })
                 .range(from, from + pageSize - 1);
@@ -424,7 +444,11 @@ export async function getRecentMatches(limit = 8): Promise<Match[]> {
     }
 
     return withRedisCache(`matches:recent:${limit}`, HOUR_IN_SECONDS, async () => {
-        const { data, error } = await supabaseClient.from('matches').select('*').order('start_time', { ascending: false }).limit(limit);
+        const { data, error } = await supabaseClient
+            .from('matches')
+            .select('match_id,league_id,start_time,duration,radiant_score,dire_score,radiant_win,series_id,series_type,radiant_team_id,dire_team_id,patch_id')
+            .order('start_time', { ascending: false })
+            .limit(limit);
 
         if (error || !data) {
             return mockMatches.slice(0, limit);
@@ -746,7 +770,7 @@ export async function getMatchesByLeague(leagueId: string, limit = 10): Promise<
     return withRedisCache(`matches:league:${encodeCachePart(leagueId)}:${limit}`, HOUR_IN_SECONDS, async () => {
         const { data, error } = await supabaseClient
             .from('matches')
-            .select('*')
+            .select('match_id,league_id,start_time,duration,dire_score,radiant_score,radiant_win,series_id,series_type,radiant_team_id,dire_team_id,first_tower_time,patch_id')
             .eq('league_id', leagueId)
             .order('start_time', { ascending: false })
             .limit(limit);
@@ -807,7 +831,7 @@ export async function getMatchesByTeam(teamId: string, limit = 10): Promise<Matc
     return withRedisCache(`matches:team:${encodeCachePart(teamId)}:${limit}`, HOUR_IN_SECONDS, async () => {
         const { data, error } = await supabaseClient
             .from('matches')
-            .select('*')
+            .select('match_id,league_id,start_time,duration,dire_score,radiant_score,radiant_win,series_id,series_type,radiant_team_id,dire_team_id,first_tower_time,patch_id')
             .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`)
             .order('start_time', { ascending: false })
             .limit(limit);
@@ -879,7 +903,7 @@ export async function getMatchesByLeagueIds(leagueIds: string[]): Promise<Match[
             while (true) {
                 const { data, error } = await supabaseClient
                     .from('matches')
-                    .select('*')
+                    .select('match_id,league_id,start_time,duration,dire_score,radiant_score,radiant_win,series_id,series_type,radiant_team_id,dire_team_id,first_tower_time,patch_id')
                     .in('league_id', normalizedLeagueIds)
                     .order('start_time', { ascending: false })
                     .range(from, from + pageSize - 1);
@@ -912,7 +936,10 @@ export async function getMatchesByIds(matchIds: string[]): Promise<Match[]> {
     }
 
     return withRedisCache(`matches:ids:${normalizedMatchIds.map(encodeCachePart).join(',')}`, HOUR_IN_SECONDS, async () => {
-        const { data, error } = await supabaseClient.from('matches').select('*').in('match_id', normalizedMatchIds);
+        const { data, error } = await supabaseClient
+            .from('matches')
+            .select('match_id,league_id,start_time,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,duration')
+            .in('match_id', normalizedMatchIds);
         if (error || !data) {
             return [];
         }
@@ -939,14 +966,12 @@ export async function getMatchesByYear(year: number): Promise<Match[]> {
         let from = 0;
 
         while (true) {
-            const { data, error } = await supabaseClient
-                .from('matches')
-                .select(
-                    'match_id,league_id,duration,start_time,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,first_tower_time,patch_id,picks_bans,series_id,series_type',
-                )
-                .gte('start_time', start)
-                .lt('start_time', end)
-                .order('start_time', { ascending: true })
+        const { data, error } = await supabaseClient
+            .from('matches')
+            .select('match_id,league_id,start_time,duration,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,first_tower_time,patch_id,series_id,series_type')
+            .gte('start_time', start)
+            .lt('start_time', end)
+            .order('start_time', { ascending: true })
                 .range(from, from + pageSize - 1);
 
             if (error) {

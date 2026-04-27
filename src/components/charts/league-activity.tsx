@@ -76,3 +76,4 @@ function LeagueActivityChart({ leagues, matches }: LeagueActivityProps) {
 }
 
 export const LeagueActivity = memo(LeagueActivityChart);
+export default LeagueActivity;
