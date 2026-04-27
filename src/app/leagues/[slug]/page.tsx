@@ -3,6 +3,7 @@ import Script from "next/script";
 
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ExportCsvButton } from "@/components/export-csv-button";
+import { ShareButton } from "@/components/share-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
@@ -342,10 +343,12 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
                     const teamName = performer.teamId ? teamLookup.get(performer.teamId)?.name ?? performer.teamId : "Unknown";
                     const heroImage = buildHeroImageUrl(performer.heroId);
 
+                    const shareText = `${entry.title} in ${league.name}: ${formatNumber(performer.statValue)} — ${heroName} playing for ${teamName} (KDA: ${performer.kills}/${performer.deaths}/${performer.assists}) via DotaData`;
+
                     return (
                       <div key={entry.key} className="rounded-lg border border-border/60 bg-background/40 p-4">
                         <div className="flex items-start gap-4">
-                          <div className="h-14 w-14 overflow-hidden rounded-lg border border-border/60 bg-muted">
+                          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted">
                             {heroImage ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img src={heroImage} alt={heroName} className="h-full w-full object-cover" />
@@ -355,19 +358,24 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
                               </div>
                             )}
                           </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold text-foreground">{entry.title}</p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-semibold text-foreground">{entry.title}</p>
+                              <ShareButton
+                                title={entry.title}
+                                text={shareText}
+                                url={`/leagues/${league.slug}`}
+                                className="shrink-0"
+                              />
+                            </div>
                             <p className="mt-1 text-2xl font-semibold text-primary">
                               {formatNumber(performer.statValue)}
                             </p>
                             <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                              <p>Match ID: {performer.matchId}</p>
-                              <p>Hero: {heroName}</p>
-                              <p>Player: {performer.accountId ?? "Unknown"}</p>
-                              <p>Team: {teamName}</p>
-                              <p>
-                                KDA: {performer.kills}/{performer.deaths}/{performer.assists}
-                              </p>
+                              <p>Hero: <span className="text-foreground">{heroName}</span></p>
+                              <p>Team: <span className="text-foreground">{teamName}</span></p>
+                              <p>KDA: <span className="text-foreground">{performer.kills}/{performer.deaths}/{performer.assists}</span></p>
+                              <p className="text-xs">Match ID: {performer.matchId}</p>
                             </div>
                           </div>
                         </div>
