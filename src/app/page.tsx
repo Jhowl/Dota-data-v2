@@ -204,7 +204,7 @@ export default async function HomePage() {
                 </>
               )}
             </p>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Button asChild size="sm">
                 <Link href="/leagues">Explore leagues</Link>
               </Button>
@@ -214,6 +214,11 @@ export default async function HomePage() {
               <Button asChild size="sm" variant="outline">
                 <Link href="/patches">Patch analysis</Link>
               </Button>
+              <ShareButton
+                title="DotaData — Competitive Dota 2 analytics"
+                text={`📊 ${formatNumber(counts.matches)} pro Dota 2 matches across ${formatNumber(counts.leagues)} leagues and ${formatNumber(counts.teams)} teams — explore live stats on DotaData`}
+                url="/"
+              />
             </div>
           </div>
 
@@ -408,6 +413,27 @@ export default async function HomePage() {
           </CardContent>
         </Card>
       </section>
+
+      {/* ── Closing share CTA ────────────────────────────────────────────── */}
+      <section className="rounded-2xl border border-border/60 bg-card/80 p-6 text-center md:p-8">
+        <h2 className="font-display text-xl font-semibold md:text-2xl">
+          Share the data
+        </h2>
+        <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
+          Drop these numbers in your scrim chat, draft channel, or community feed — every page
+          on DotaData has a share button so insights travel with one click.
+        </p>
+        <div className="mt-4 flex flex-wrap justify-center gap-3">
+          <ShareButton
+            title="DotaData — Competitive Dota 2 analytics"
+            text={`📊 ${formatNumber(counts.matches)} pro Dota 2 matches across ${formatNumber(counts.leagues)} leagues — explore live stats on DotaData`}
+            url="/"
+          />
+          <Button asChild variant="outline" size="sm">
+            <Link href="/leagues">Browse leagues</Link>
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -473,15 +499,27 @@ interface LeagueSpotlightCardProps {
 }
 
 function LeagueSpotlightCard({ league }: LeagueSpotlightCardProps) {
+  const shareText = `📊 ${league.leagueName}: ${formatNumber(league.matches)} matches, ${fmt(league.avgDuration)} avg, ${league.avgScore.toFixed(1)} avg kills — full stats on DotaData`;
+
   return (
-    <Link
-      href={`/leagues/${league.leagueSlug}`}
-      className="group flex flex-col rounded-2xl border border-border/60 bg-card/80 p-5 transition-colors hover:border-primary/40 hover:bg-card"
-    >
-      <p className="line-clamp-2 font-display text-base font-semibold text-foreground group-hover:text-primary">
+    <div className="group relative flex flex-col rounded-2xl border border-border/60 bg-card/80 p-5 transition-colors hover:border-primary/40 hover:bg-card">
+      <div className="absolute right-4 top-4 z-10">
+        <ShareButton
+          title={league.leagueName}
+          text={shareText}
+          url={`/leagues/${league.leagueSlug}`}
+          variant="compact"
+        />
+      </div>
+      <Link
+        href={`/leagues/${league.leagueSlug}`}
+        className="absolute inset-0 z-0 rounded-2xl"
+        aria-label={`View ${league.leagueName} statistics`}
+      />
+      <p className="relative z-[1] line-clamp-2 max-w-[calc(100%-4rem)] font-display text-base font-semibold text-foreground group-hover:text-primary">
         {league.leagueName}
       </p>
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="relative z-[1] mt-4 grid grid-cols-2 gap-3 pointer-events-none">
         {[
           { label: "Matches", value: formatNumber(league.matches) },
           { label: "Avg duration", value: fmt(league.avgDuration) },
@@ -494,9 +532,9 @@ function LeagueSpotlightCard({ league }: LeagueSpotlightCardProps) {
           </div>
         ))}
       </div>
-      <p className="mt-4 text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
+      <p className="relative z-[1] mt-4 text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100 pointer-events-none">
         Explore full stats →
       </p>
-    </Link>
+    </div>
   );
 }
