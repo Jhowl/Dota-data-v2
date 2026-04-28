@@ -3,5 +3,4 @@ node_modules
 .env
 .env.local
 .git
-Dockerfile
 docker-compose.yml
