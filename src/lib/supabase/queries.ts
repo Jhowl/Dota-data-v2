@@ -1445,6 +1445,266 @@ export async function getLeaguePickBanStats(
     });
 }
 
+export type LeagueDraftHero = {
+    heroId: string;
+    picks: number;
+    bans: number;
+    contested: number;
+    contestRate: number;
+    pickRate: number;
+    banRate: number;
+    winsWhenPicked: number;
+    winRate: number | null;
+    radiantPicks: number;
+    direPicks: number;
+    avgPickOrder: number | null;
+    avgBanOrder: number | null;
+    earliestPickOrder: number | null;
+    earliestBanOrder: number | null;
+};
+
+export type LeagueDraftTeamSnapshot = {
+    teamId: string;
+    matches: number;
+    topPicks: Array<{ heroId: string; total: number }>;
+    topBans: Array<{ heroId: string; total: number }>;
+};
+
+export type LeaguePickBanAnalysis = {
+    totalMatches: number;
+    matchesWithDraft: number;
+    totalPicks: number;
+    totalBans: number;
+    uniqueHeroesPicked: number;
+    uniqueHeroesBanned: number;
+    uniqueHeroesSeen: number;
+    heroes: LeagueDraftHero[];
+    teams: LeagueDraftTeamSnapshot[];
+};
+
+type HeroAccumulator = {
+    heroId: string;
+    picks: number;
+    bans: number;
+    winsWhenPicked: number;
+    radiantPicks: number;
+    direPicks: number;
+    pickOrderSum: number;
+    pickOrderCount: number;
+    banOrderSum: number;
+    banOrderCount: number;
+    earliestPickOrder: number | null;
+    earliestBanOrder: number | null;
+};
+
+type TeamAccumulator = {
+    teamId: string;
+    matches: number;
+    picks: Record<string, number>;
+    bans: Record<string, number>;
+};
+
+export async function getLeaguePickBanAnalysis(
+    leagueId: string,
+): Promise<LeaguePickBanAnalysis | null> {
+    if (!supabase || !leagueId) {
+        return null;
+    }
+
+    return withRedisCache(
+        `pickban:league-analysis:${encodeCachePart(leagueId)}`,
+        SIX_HOURS_IN_SECONDS,
+        async () => {
+            const heroes: Record<string, HeroAccumulator> = {};
+            const teams: Record<string, TeamAccumulator> = {};
+            let totalMatches = 0;
+            let matchesWithDraft = 0;
+            let totalPicks = 0;
+            let totalBans = 0;
+
+            const ensureHero = (heroId: string): HeroAccumulator => {
+                if (!heroes[heroId]) {
+                    heroes[heroId] = {
+                        heroId,
+                        picks: 0,
+                        bans: 0,
+                        winsWhenPicked: 0,
+                        radiantPicks: 0,
+                        direPicks: 0,
+                        pickOrderSum: 0,
+                        pickOrderCount: 0,
+                        banOrderSum: 0,
+                        banOrderCount: 0,
+                        earliestPickOrder: null,
+                        earliestBanOrder: null,
+                    };
+                }
+                return heroes[heroId];
+            };
+
+            const ensureTeam = (teamId: string): TeamAccumulator => {
+                if (!teams[teamId]) {
+                    teams[teamId] = { teamId, matches: 0, picks: {}, bans: {} };
+                }
+                return teams[teamId];
+            };
+
+            const pageSize = 1000;
+            let from = 0;
+
+            while (true) {
+                const { data, error } = await supabaseClient
+                    .from('matches')
+                    .select('picks_bans,radiant_win,radiant_team_id,dire_team_id')
+                    .eq('league_id', leagueId)
+                    .range(from, from + pageSize - 1);
+
+                if (error || !data?.length) {
+                    break;
+                }
+
+                (data as Array<Record<string, unknown>>).forEach((row) => {
+                    totalMatches += 1;
+                    const radiantId = row.radiant_team_id ? String(row.radiant_team_id) : null;
+                    const direId = row.dire_team_id ? String(row.dire_team_id) : null;
+                    const radiantWin = Boolean(row.radiant_win);
+                    const entries = parsePickBans(row.picks_bans);
+
+                    if (!entries.length) {
+                        if (radiantId) ensureTeam(radiantId).matches += 1;
+                        if (direId) ensureTeam(direId).matches += 1;
+                        return;
+                    }
+
+                    matchesWithDraft += 1;
+                    if (radiantId) ensureTeam(radiantId).matches += 1;
+                    if (direId) ensureTeam(direId).matches += 1;
+
+                    entries.forEach((entry) => {
+                        const heroId = String(entry.hero_id ?? '');
+                        if (!heroId) return;
+
+                        const hero = ensureHero(heroId);
+                        const side = entry.team;
+                        const order = typeof entry.order === 'number' ? entry.order : null;
+                        const teamId = side === 0 ? radiantId : side === 1 ? direId : null;
+
+                        if (entry.is_pick) {
+                            hero.picks += 1;
+                            totalPicks += 1;
+                            if (side === 0) hero.radiantPicks += 1;
+                            else if (side === 1) hero.direPicks += 1;
+
+                            const sideWon = side === 0 ? radiantWin : !radiantWin;
+                            if (side === 0 || side === 1) {
+                                if (sideWon) hero.winsWhenPicked += 1;
+                            }
+
+                            if (order !== null) {
+                                hero.pickOrderSum += order;
+                                hero.pickOrderCount += 1;
+                                if (
+                                    hero.earliestPickOrder === null ||
+                                    order < hero.earliestPickOrder
+                                ) {
+                                    hero.earliestPickOrder = order;
+                                }
+                            }
+
+                            if (teamId) {
+                                const team = ensureTeam(teamId);
+                                team.picks[heroId] = (team.picks[heroId] ?? 0) + 1;
+                            }
+                        } else {
+                            hero.bans += 1;
+                            totalBans += 1;
+
+                            if (order !== null) {
+                                hero.banOrderSum += order;
+                                hero.banOrderCount += 1;
+                                if (
+                                    hero.earliestBanOrder === null ||
+                                    order < hero.earliestBanOrder
+                                ) {
+                                    hero.earliestBanOrder = order;
+                                }
+                            }
+
+                            if (teamId) {
+                                const team = ensureTeam(teamId);
+                                team.bans[heroId] = (team.bans[heroId] ?? 0) + 1;
+                            }
+                        }
+                    });
+                });
+
+                if (data.length < pageSize) break;
+                from += pageSize;
+            }
+
+            const denom = matchesWithDraft || 1;
+            const heroList: LeagueDraftHero[] = Object.values(heroes)
+                .map((hero) => {
+                    const contested = hero.picks + hero.bans;
+                    return {
+                        heroId: hero.heroId,
+                        picks: hero.picks,
+                        bans: hero.bans,
+                        contested,
+                        contestRate: matchesWithDraft ? (contested / denom) * 100 : 0,
+                        pickRate: matchesWithDraft ? (hero.picks / denom) * 100 : 0,
+                        banRate: matchesWithDraft ? (hero.bans / denom) * 100 : 0,
+                        winsWhenPicked: hero.winsWhenPicked,
+                        winRate: hero.picks > 0 ? (hero.winsWhenPicked / hero.picks) * 100 : null,
+                        radiantPicks: hero.radiantPicks,
+                        direPicks: hero.direPicks,
+                        avgPickOrder: hero.pickOrderCount
+                            ? hero.pickOrderSum / hero.pickOrderCount
+                            : null,
+                        avgBanOrder: hero.banOrderCount
+                            ? hero.banOrderSum / hero.banOrderCount
+                            : null,
+                        earliestPickOrder: hero.earliestPickOrder,
+                        earliestBanOrder: hero.earliestBanOrder,
+                    };
+                })
+                .sort((a, b) => b.contested - a.contested);
+
+            const topByCount = (record: Record<string, number>, limit = 5) =>
+                Object.entries(record)
+                    .map(([heroId, total]) => ({ heroId, total }))
+                    .sort((a, b) => b.total - a.total)
+                    .slice(0, limit);
+
+            const teamList: LeagueDraftTeamSnapshot[] = Object.values(teams)
+                .filter((team) => team.matches > 0)
+                .sort((a, b) => b.matches - a.matches)
+                .slice(0, 12)
+                .map((team) => ({
+                    teamId: team.teamId,
+                    matches: team.matches,
+                    topPicks: topByCount(team.picks, 5),
+                    topBans: topByCount(team.bans, 5),
+                }));
+
+            const uniqueHeroesPicked = heroList.filter((h) => h.picks > 0).length;
+            const uniqueHeroesBanned = heroList.filter((h) => h.bans > 0).length;
+
+            return {
+                totalMatches,
+                matchesWithDraft,
+                totalPicks,
+                totalBans,
+                uniqueHeroesPicked,
+                uniqueHeroesBanned,
+                uniqueHeroesSeen: heroList.length,
+                heroes: heroList,
+                teams: teamList,
+            };
+        },
+    );
+}
+
 export async function getTeamPickBanStats(
     teamId: string,
     limit = 10,

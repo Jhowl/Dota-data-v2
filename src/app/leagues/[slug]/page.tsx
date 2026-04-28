@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Script from "next/script";
 import {
+  ArrowRight,
   Calendar,
   Clock,
   Flame,
@@ -505,13 +506,22 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
 
             {/* ── Pick & ban ─────────────────────────────────────────── */}
             <section aria-labelledby="pickban-heading" className="space-y-4">
-              <div>
-                <h2 id="pickban-heading" className="font-display text-2xl font-semibold">
-                  Pick &amp; ban analysis
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Most picked, banned and contested heroes in {league.name}.
-                </p>
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h2 id="pickban-heading" className="font-display text-2xl font-semibold">
+                    Pick &amp; ban analysis
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Most picked, banned and contested heroes in {league.name}.
+                  </p>
+                </div>
+                <Link
+                  href={`/leagues/${league.slug}/pick-ban`}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-background/60 px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  Full draft breakdown
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
               </div>
               <div className="grid gap-6 lg:grid-cols-3">
                 {[

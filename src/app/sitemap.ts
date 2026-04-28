@@ -83,6 +83,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly" as const,
       priority: 0.7,
     })),
+    ...leagues.map((league) => ({
+      url: `${baseUrl}/leagues/${league.slug}/pick-ban`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    })),
     ...teams.map((team) => ({
       url: `${baseUrl}/teams/${team.slug}`,
       lastModified: now,
