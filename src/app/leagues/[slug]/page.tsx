@@ -26,6 +26,7 @@ import {
   getLeagueTeamParticipation,
   getLeagueSummary,
   getMatchesByIds,
+  getPlayersByIds,
   getTopPerformersByLeague,
   getTeams,
 } from "@/lib/supabase/queries";
@@ -133,7 +134,14 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
     leagueSummary?.longestMatchId,
   ].filter(Boolean) as string[];
 
-  const highlightMatches = await getMatchesByIds([...new Set(highlightMatchIds)]);
+  const performerAccountIds = topPerformers
+    .map((entry) => entry.performer?.accountId)
+    .filter((value): value is string => Boolean(value));
+
+  const [highlightMatches, playerLookup] = await Promise.all([
+    getMatchesByIds([...new Set(highlightMatchIds)]),
+    getPlayersByIds(performerAccountIds),
+  ]);
 
   const teamLookup = new Map(teams.map((team) => [team.id, team]));
   const heroLookup = new Map(heroes.map((hero) => [hero.id, hero.localizedName]));
@@ -609,9 +617,12 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
                         const teamName = performer.teamId
                           ? teamLookup.get(performer.teamId)?.name ?? performer.teamId
                           : "Unknown";
+                        const playerName = performer.accountId
+                          ? playerLookup.get(performer.accountId) ?? `Player ${performer.accountId}`
+                          : "Unknown";
                         const heroImage = buildHeroImageUrl(performer.heroId);
 
-                        const shareText = `${entry.title} in ${league.name}: ${formatNumber(performer.statValue)} — ${heroName} playing for ${teamName} (KDA: ${performer.kills}/${performer.deaths}/${performer.assists}) via DotaData`;
+                        const shareText = `${entry.title} in ${league.name}: ${formatNumber(performer.statValue)} — ${playerName} on ${heroName} for ${teamName} (KDA ${performer.kills}/${performer.deaths}/${performer.assists}) via DotaData`;
 
                         return (
                           <div
@@ -650,6 +661,9 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
                                   {formatNumber(performer.statValue)}
                                 </p>
                                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                                  <p>
+                                    Player: <span className="text-foreground">{playerName}</span>
+                                  </p>
                                   <p>
                                     Hero: <span className="text-foreground">{heroName}</span>
                                   </p>

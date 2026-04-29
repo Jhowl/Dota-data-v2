@@ -9,6 +9,7 @@ import { createHeroImageResolver } from "@/lib/hero";
 import {
   getHeroes,
   getMatchesByIds,
+  getPlayersByIds,
   getSeasonSnapshot,
   getTeams,
 } from "@/lib/supabase/queries";
@@ -108,7 +109,14 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
     summary.fastestMatchId,
     summary.longestMatchId,
   ].filter(Boolean) as string[];
-  const highlightMatches = await getMatchesByIds([...new Set(highlightMatchIds)]);
+  const performerAccountIds = aggregatedTopPerformers
+    .map((entry) => entry.performer?.accountId)
+    .filter((value): value is string => Boolean(value));
+
+  const [highlightMatches, playerLookup] = await Promise.all([
+    getMatchesByIds([...new Set(highlightMatchIds)]),
+    getPlayersByIds(performerAccountIds),
+  ]);
   const matchById = new Map(highlightMatches.map((match) => [match.id, match]));
 
   const minScoreMatch = summary.minScoreMatchId ? matchById.get(summary.minScoreMatchId) ?? null : null;
@@ -367,13 +375,20 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
                           {formatNumber(performer.statValue)}
                         </p>
                         <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                          <p>Match ID: {performer.matchId}</p>
-                          <p>Hero: {heroName}</p>
-                          <p>Player: {performer.accountId ?? "Unknown"}</p>
-                          <p>Team: {teamName}</p>
                           <p>
-                            KDA: {performer.kills}/{performer.deaths}/{performer.assists}
+                            Player:{" "}
+                            <span className="text-foreground">
+                              {performer.accountId
+                                ? playerLookup.get(performer.accountId) ?? `Player ${performer.accountId}`
+                                : "Unknown"}
+                            </span>
                           </p>
+                          <p>Hero: <span className="text-foreground">{heroName}</span></p>
+                          <p>Team: <span className="text-foreground">{teamName}</span></p>
+                          <p>
+                            KDA: <span className="text-foreground">{performer.kills}/{performer.deaths}/{performer.assists}</span>
+                          </p>
+                          <p className="text-xs">Match ID: {performer.matchId}</p>
                         </div>
                       </div>
                     </div>

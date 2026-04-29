@@ -438,6 +438,39 @@ export async function getHeroes(): Promise<Hero[]> {
     });
 }
 
+export async function getPlayersByIds(ids: Array<string | number | null | undefined>): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    const cleanIds = normalizeIds(ids);
+    if (!supabase || cleanIds.length === 0) {
+        return result;
+    }
+
+    const cacheKey = `players:by-ids:v2:${encodeCachePart(cleanIds.join(','))}`;
+    const rows = await withRedisCache(cacheKey, DAY_IN_SECONDS, async () => {
+        const collected: Array<{ id: string; name: string }> = [];
+        const chunkSize = 200;
+        for (let i = 0; i < cleanIds.length; i += chunkSize) {
+            const chunk = cleanIds.slice(i, i + chunkSize);
+            const { data, error } = await supabaseClient
+                .from('players')
+                .select('id,name')
+                .in('id', chunk);
+            if (error || !data) continue;
+            (data as Array<Record<string, unknown>>).forEach((row) => {
+                const id = String(row.id ?? '');
+                const name = String(row.name ?? '').trim();
+                if (id && name) {
+                    collected.push({ id, name });
+                }
+            });
+        }
+        return collected;
+    });
+
+    rows.forEach((row) => result.set(row.id, row.name));
+    return result;
+}
+
 export async function getRecentMatches(limit = 8): Promise<Match[]> {
     if (!supabase) {
         return mockMatches.slice(0, limit);
@@ -592,7 +625,7 @@ export async function getTopPerformersByLeague(leagueId: string): Promise<TopPer
         return emptyTopPerformerStats();
     }
 
-    return withRedisCache(`top-performers:league:${encodeCachePart(leagueId)}`, SIX_HOURS_IN_SECONDS, async () => {
+    return withRedisCache(`top-performers:league:v2:${encodeCachePart(leagueId)}`, SIX_HOURS_IN_SECONDS, async () => {
         const rows = await collectTopPerformerRows(async (from, to) =>
             await client
                 .from('player_matches')
@@ -612,7 +645,7 @@ export async function getTopPerformersByTeam(teamId: string): Promise<TopPerform
         return emptyTopPerformerStats();
     }
 
-    return withRedisCache(`top-performers:team:${encodeCachePart(teamId)}`, SIX_HOURS_IN_SECONDS, async () => {
+    return withRedisCache(`top-performers:team:v2:${encodeCachePart(teamId)}`, SIX_HOURS_IN_SECONDS, async () => {
         const rows = await collectTopPerformerRows(async (from, to) =>
             await client
                 .from('player_matches')
@@ -748,7 +781,7 @@ export async function getTopPerformersByPatch(patchId: string): Promise<TopPerfo
         return emptyTopPerformerStats();
     }
 
-    return withRedisCache(`top-performers:patch:${encodeCachePart(patchId)}`, SIX_HOURS_IN_SECONDS, async () => {
+    return withRedisCache(`top-performers:patch:v2:${encodeCachePart(patchId)}`, SIX_HOURS_IN_SECONDS, async () => {
         const rows = await collectTopPerformerRows(async (from, to) =>
             await client
                 .from('player_matches')

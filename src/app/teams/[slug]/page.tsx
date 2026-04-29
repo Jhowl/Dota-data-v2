@@ -12,6 +12,7 @@ import { getTeamStaticParams } from "@/lib/static-params";
 import {
   getHeroes,
   getMatchesByIds,
+  getPlayersByIds,
   getTeamBySlug,
   getTeamPickBanStats,
   getTeamSummary,
@@ -90,7 +91,14 @@ export default async function TeamPage({ params }: TeamPageProps) {
     teamSummary?.longestMatchId,
   ].filter(Boolean) as string[];
 
-  const highlightMatches = await getMatchesByIds([...new Set(highlightMatchIds)]);
+  const performerAccountIds = topPerformers
+    .map((entry) => entry.performer?.accountId)
+    .filter((value): value is string => Boolean(value));
+
+  const [highlightMatches, playerLookup] = await Promise.all([
+    getMatchesByIds([...new Set(highlightMatchIds)]),
+    getPlayersByIds(performerAccountIds),
+  ]);
 
   const teamLookup = new Map(teams.map((entry) => [entry.id, entry.name]));
   const heroLookup = new Map(heroes.map((hero) => [hero.id, hero.localizedName]));
@@ -370,12 +378,12 @@ export default async function TeamPage({ params }: TeamPageProps) {
                               {formatNumber(performer.statValue)}
                             </p>
                             <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                              <p>Match ID: {performer.matchId}</p>
-                              <p>Hero: {heroName}</p>
-                              <p>Player: {performer.accountId ?? "Unknown"}</p>
+                              <p>Player: <span className="text-foreground">{performer.accountId ? playerLookup.get(performer.accountId) ?? `Player ${performer.accountId}` : "Unknown"}</span></p>
+                              <p>Hero: <span className="text-foreground">{heroName}</span></p>
                               <p>
-                                KDA: {performer.kills}/{performer.deaths}/{performer.assists}
+                                KDA: <span className="text-foreground">{performer.kills}/{performer.deaths}/{performer.assists}</span>
                               </p>
+                              <p className="text-xs">Match ID: {performer.matchId}</p>
                             </div>
                           </div>
                         </div>

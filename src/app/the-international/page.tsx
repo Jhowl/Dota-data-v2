@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Script from "next/script";
 
+import { ShareButton } from "@/components/share-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
@@ -11,6 +12,7 @@ import {
   getLeaguePickBanStats,
   getLeagues,
   getMatchesByLeagueIds,
+  getPlayersByIds,
   getTeams,
   getTopPerformersByLeague,
 } from "@/lib/supabase/queries";
@@ -79,6 +81,11 @@ export default async function InternationalPage() {
 
   const aggregatedTopPerformers = Array.from(topPerformersByStat.values());
 
+  const performerAccountIds = aggregatedTopPerformers
+    .map((entry) => entry.performer?.accountId)
+    .filter((value): value is string => Boolean(value));
+  const playerLookup = await getPlayersByIds(performerAccountIds);
+
   const pickBanBuckets = [...leagueIds].length
     ? (
         await Promise.all([...leagueIds].map((leagueId) => getLeaguePickBanStats(leagueId, 50)))
@@ -127,7 +134,14 @@ export default async function InternationalPage() {
       </Script>
       <div className="space-y-10">
       <section className="space-y-4">
-        <Badge className="w-fit bg-primary/10 text-primary">Premier event</Badge>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <Badge className="w-fit bg-primary/10 text-primary">Premier event</Badge>
+          <ShareButton
+            title="The International — Dota 2 World Championship"
+            text={`🏆 The International on DotaData: ${formatNumber(internationalLeagues.length)} editions, ${formatNumber(summary.totalMatches)} matches — explore the full history`}
+            url="/the-international"
+          />
+        </div>
         <h1 className="font-display text-3xl font-semibold md:text-4xl">The International</h1>
         <p className="max-w-3xl text-muted-foreground">
           The International is Dota 2&apos;s flagship world championship. This page brings every edition together,
@@ -362,12 +376,17 @@ export default async function InternationalPage() {
                     const performer = entry.performer;
                     const heroName = performer.heroId ? heroLookup.get(performer.heroId) ?? performer.heroId : "Unknown";
                     const teamName = performer.teamId ? teamLookup.get(performer.teamId) ?? performer.teamId : "Unknown";
+                    const playerName = performer.accountId
+                      ? playerLookup.get(performer.accountId) ?? `Player ${performer.accountId}`
+                      : "Unknown";
                     const heroImage = buildHeroImageUrl(performer.heroId);
+
+                    const shareText = `${entry.title} at The International: ${formatNumber(performer.statValue)} — ${playerName} on ${heroName} for ${teamName} (KDA ${performer.kills}/${performer.deaths}/${performer.assists}) via DotaData`;
 
                     return (
                       <div key={entry.key} className="rounded-lg border border-border/60 bg-background/40 p-4">
                         <div className="flex items-start gap-4">
-                          <div className="h-14 w-14 overflow-hidden rounded-lg border border-border/60 bg-muted">
+                          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted">
                             {heroImage ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img src={heroImage} alt={heroName} className="h-full w-full object-cover" />
@@ -377,19 +396,28 @@ export default async function InternationalPage() {
                               </div>
                             )}
                           </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold text-foreground">{entry.title}</p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-semibold text-foreground">{entry.title}</p>
+                              <ShareButton
+                                title={entry.title}
+                                text={shareText}
+                                url="/the-international"
+                                variant="compact"
+                                className="shrink-0"
+                              />
+                            </div>
                             <p className="mt-1 text-2xl font-semibold text-primary">
                               {formatNumber(performer.statValue)}
                             </p>
                             <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                              <p>Match ID: {performer.matchId}</p>
-                              <p>Hero: {heroName}</p>
-                              <p>Player: {performer.accountId ?? "Unknown"}</p>
-                              <p>Team: {teamName}</p>
+                              <p>Player: <span className="text-foreground">{playerName}</span></p>
+                              <p>Hero: <span className="text-foreground">{heroName}</span></p>
+                              <p>Team: <span className="text-foreground">{teamName}</span></p>
                               <p>
-                                KDA: {performer.kills}/{performer.deaths}/{performer.assists}
+                                KDA: <span className="text-foreground">{performer.kills}/{performer.deaths}/{performer.assists}</span>
                               </p>
+                              <p className="text-xs">Match ID: {performer.matchId}</p>
                             </div>
                           </div>
                         </div>

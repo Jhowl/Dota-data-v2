@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDate, formatNumber, formatPercent } from '@/lib/format';
 import { createHeroImageResolver } from '@/lib/hero';
 import { getPatchStaticParams } from '@/lib/static-params';
-import { getHeroes, getLeagues, getMatchesByPatch, getPatchBySlug, getTeams, getTopPerformersByPatch } from '@/lib/supabase/queries';
+import { getHeroes, getLeagues, getMatchesByPatch, getPatchBySlug, getPlayersByIds, getTeams, getTopPerformersByPatch } from '@/lib/supabase/queries';
 
 interface PatchPageProps {
     params: Promise<{ patch: string }>;
@@ -64,6 +64,11 @@ export default async function PatchPage({ params }: PatchPageProps) {
         getHeroes(),
         getTopPerformersByPatch(patchEntry.id),
     ]);
+
+    const performerAccountIds = topPerformers
+        .map((entry) => entry.performer?.accountId)
+        .filter((value): value is string => Boolean(value));
+    const playerLookup = await getPlayersByIds(performerAccountIds);
 
     if (!matches.length) {
         return (
@@ -470,16 +475,25 @@ export default async function PatchPage({ params }: PatchPageProps) {
                                                 <p className="text-sm font-semibold text-foreground">{entry.title}</p>
                                                 <p className="mt-1 text-2xl font-semibold text-primary">{formatNumber(performer.statValue)}</p>
                                                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                                                    <p>Match ID: {performer.matchId}</p>
-                                                    <p>Hero: {heroName}</p>
+                                                    <p>
+                                                        Player:{' '}
+                                                        <span className="text-foreground">
+                                                            {performer.accountId
+                                                                ? (playerLookup.get(performer.accountId) ?? `Player ${performer.accountId}`)
+                                                                : 'Unknown'}
+                                                        </span>
+                                                    </p>
+                                                    <p>Hero: <span className="text-foreground">{heroName}</span></p>
                                                     <p>
                                                         Team:{' '}
-                                                        {performer.teamId ? (teamLookup.get(performer.teamId)?.name ?? performer.teamId) : 'Unknown'}
+                                                        <span className="text-foreground">
+                                                            {performer.teamId ? (teamLookup.get(performer.teamId)?.name ?? performer.teamId) : 'Unknown'}
+                                                        </span>
                                                     </p>
-                                                    <p>Player: {performer.accountId ?? 'Unknown'}</p>
                                                     <p>
-                                                        KDA: {performer.kills}/{performer.deaths}/{performer.assists}
+                                                        KDA: <span className="text-foreground">{performer.kills}/{performer.deaths}/{performer.assists}</span>
                                                     </p>
+                                                    <p className="text-xs">Match ID: {performer.matchId}</p>
                                                 </div>
                                             </div>
                                         </div>
