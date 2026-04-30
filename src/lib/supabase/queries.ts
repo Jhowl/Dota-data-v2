@@ -517,6 +517,27 @@ export type LeagueTeamParticipation = {
     mostPickedTotal: number;
 };
 
+export type LeagueChampionPlayer = {
+    accountId: string | null;
+    heroId: string | null;
+    kills: number;
+    deaths: number;
+    assists: number;
+};
+
+export type LeagueChampion = {
+    leagueId: string;
+    winnerTeamId: string;
+    runnerUpTeamId: string | null;
+    winnerWins: number;
+    runnerUpWins: number;
+    seriesId: string | null;
+    seriesType: string | null;
+    finalMatchId: string;
+    finalMatchStartTime: string | null;
+    roster: LeagueChampionPlayer[];
+};
+
 const TOP_PERFORMER_STATS = [
     { key: 'kills', title: 'Most Kills', field: 'kills' },
     { key: 'deaths', title: 'Most Deaths', field: 'deaths' },
@@ -772,6 +793,217 @@ export async function getLeagueTeamParticipation(leagueId: string): Promise<Leag
         });
 
         return participation.sort((a, b) => b.matchCount - a.matchCount);
+    });
+}
+
+export async function getLeagueChampion(leagueId: string): Promise<LeagueChampion | null> {
+    if (!supabase || !leagueId) {
+        return null;
+    }
+
+    return withRedisCache(`league-champion:v1:${encodeCachePart(leagueId)}`, SIX_HOURS_IN_SECONDS, async () => {
+        const pageSize = 1000;
+        const matchRows: Array<{
+            match_id: string;
+            start_time: string | null;
+            series_id: string | null;
+            series_type: string | null;
+            radiant_team_id: string | null;
+            dire_team_id: string | null;
+            radiant_win: boolean;
+        }> = [];
+
+        let from = 0;
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('matches')
+                .select('match_id,start_time,series_id,series_type,radiant_team_id,dire_team_id,radiant_win')
+                .eq('league_id', leagueId)
+                .order('start_time', { ascending: false })
+                .range(from, from + pageSize - 1);
+
+            if (error || !data?.length) {
+                break;
+            }
+
+            data.forEach((row) => {
+                matchRows.push({
+                    match_id: row.match_id ? String(row.match_id) : '',
+                    start_time: (row.start_time as string | null) ?? null,
+                    series_id: row.series_id ? String(row.series_id) : null,
+                    series_type: (row.series_type as string | null) ?? null,
+                    radiant_team_id: row.radiant_team_id ? String(row.radiant_team_id) : null,
+                    dire_team_id: row.dire_team_id ? String(row.dire_team_id) : null,
+                    radiant_win: Boolean(row.radiant_win),
+                });
+            });
+
+            if (data.length < pageSize) {
+                break;
+            }
+            from += pageSize;
+        }
+
+        if (!matchRows.length) {
+            return null;
+        }
+
+        const parseTime = (value: string | null) => {
+            if (!value) return 0;
+            const parsed = Date.parse(value);
+            return Number.isNaN(parsed) ? 0 : parsed;
+        };
+
+        // Group by series_id; matches without series form their own singleton series.
+        type SeriesGroup = {
+            seriesId: string | null;
+            seriesType: string | null;
+            matches: typeof matchRows;
+            latestStart: number;
+        };
+        const seriesMap = new Map<string, SeriesGroup>();
+        matchRows.forEach((match) => {
+            const key = match.series_id ?? `solo:${match.match_id}`;
+            const existing = seriesMap.get(key);
+            const ts = parseTime(match.start_time);
+            if (existing) {
+                existing.matches.push(match);
+                if (ts > existing.latestStart) {
+                    existing.latestStart = ts;
+                }
+            } else {
+                seriesMap.set(key, {
+                    seriesId: match.series_id,
+                    seriesType: match.series_type,
+                    matches: [match],
+                    latestStart: ts,
+                });
+            }
+        });
+
+        // Pick the series whose latest match is most recent — that's the final.
+        const finalSeries = Array.from(seriesMap.values()).sort(
+            (a, b) => b.latestStart - a.latestStart,
+        )[0];
+
+        if (!finalSeries) {
+            return null;
+        }
+
+        const finalMatches = [...finalSeries.matches].sort(
+            (a, b) => parseTime(a.start_time) - parseTime(b.start_time),
+        );
+        const decidingMatch = finalMatches[finalMatches.length - 1];
+        if (!decidingMatch || (!decidingMatch.radiant_team_id && !decidingMatch.dire_team_id)) {
+            return null;
+        }
+
+        // Tally wins by team across the series matches.
+        const tallies = new Map<string, number>();
+        finalMatches.forEach((match) => {
+            const winnerId = match.radiant_win ? match.radiant_team_id : match.dire_team_id;
+            if (!winnerId) return;
+            tallies.set(winnerId, (tallies.get(winnerId) ?? 0) + 1);
+        });
+
+        const winnerTeamId = decidingMatch.radiant_win
+            ? decidingMatch.radiant_team_id
+            : decidingMatch.dire_team_id;
+        if (!winnerTeamId) {
+            return null;
+        }
+
+        const runnerUpTeamId =
+            decidingMatch.radiant_team_id === winnerTeamId
+                ? decidingMatch.dire_team_id
+                : decidingMatch.radiant_team_id;
+
+        const winnerWins = tallies.get(winnerTeamId) ?? 0;
+        const runnerUpWins = runnerUpTeamId ? tallies.get(runnerUpTeamId) ?? 0 : 0;
+
+        // Roster: pull player_matches for the deciding match for the winning team.
+        const { data: rosterRows, error: rosterError } = await supabaseClient
+            .from('player_matches')
+            .select('account_id,hero_id,kills,deaths,assists,player_slot')
+            .eq('match_id', decidingMatch.match_id)
+            .eq('team_id', winnerTeamId)
+            .order('player_slot', { ascending: true });
+
+        const roster: LeagueChampionPlayer[] = !rosterError && rosterRows
+            ? rosterRows.map((row) => ({
+                  accountId: row.account_id ? String(row.account_id) : null,
+                  heroId: row.hero_id ? String(row.hero_id) : null,
+                  kills: Number(row.kills ?? 0),
+                  deaths: Number(row.deaths ?? 0),
+                  assists: Number(row.assists ?? 0),
+              }))
+            : [];
+
+        return {
+            leagueId,
+            winnerTeamId,
+            runnerUpTeamId: runnerUpTeamId ?? null,
+            winnerWins,
+            runnerUpWins,
+            seriesId: finalSeries.seriesId,
+            seriesType: finalSeries.seriesType,
+            finalMatchId: decidingMatch.match_id,
+            finalMatchStartTime: decidingMatch.start_time,
+            roster,
+        };
+    });
+}
+
+export type LeagueLastWinner = {
+    teamId: string;
+    matchId: string;
+    startTime: string | null;
+};
+
+export async function getLeagueLastWinners(): Promise<Record<string, LeagueLastWinner>> {
+    if (!supabase) {
+        return {};
+    }
+
+    return withRedisCache('league-last-winners:v1', SIX_HOURS_IN_SECONDS, async () => {
+        const map: Record<string, LeagueLastWinner> = {};
+        const pageSize = 1000;
+        let from = 0;
+
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('matches')
+                .select('league_id,match_id,start_time,radiant_team_id,dire_team_id,radiant_win')
+                .order('start_time', { ascending: false })
+                .range(from, from + pageSize - 1);
+
+            if (error || !data?.length) {
+                break;
+            }
+
+            data.forEach((row) => {
+                const leagueId = row.league_id ? String(row.league_id) : '';
+                if (!leagueId || map[leagueId]) {
+                    return;
+                }
+                const winnerTeamId = row.radiant_win ? row.radiant_team_id : row.dire_team_id;
+                if (!winnerTeamId) {
+                    return;
+                }
+                map[leagueId] = {
+                    teamId: String(winnerTeamId),
+                    matchId: row.match_id ? String(row.match_id) : '',
+                    startTime: (row.start_time as string | null) ?? null,
+                };
+            });
+
+            if (data.length < pageSize) {
+                break;
+            }
+            from += pageSize;
+        }
+
+        return map;
     });
 }
 

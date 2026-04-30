@@ -1,9 +1,11 @@
+import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
 import {
   ArrowRight,
   Calendar,
   Clock,
+  Crown,
   Flame,
   Hash,
   Swords,
@@ -21,6 +23,7 @@ import { createHeroImageResolver } from "@/lib/hero";
 import { getLeagueStaticParams } from "@/lib/static-params";
 import {
   getLeagueBySlug,
+  getLeagueChampion,
   getHeroes,
   getLeaguePickBanStats,
   getLeagueTeamParticipation,
@@ -29,7 +32,9 @@ import {
   getPlayersByIds,
   getTopPerformersByLeague,
   getTeams,
+  type LeagueChampion,
 } from "@/lib/supabase/queries";
+import type { Team } from "@/lib/types";
 
 interface LeaguePageProps {
   params: Promise<{ slug: string }>;
@@ -118,13 +123,14 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
     return <div className="py-20 text-center text-muted-foreground">League not found.</div>;
   }
 
-  const [leagueSummary, teams, heroes, topPerformers, pickBanStats, teamParticipation] = await Promise.all([
+  const [leagueSummary, teams, heroes, topPerformers, pickBanStats, teamParticipation, champion] = await Promise.all([
     getLeagueSummary(league.id),
     getTeams(),
     getHeroes(),
     getTopPerformersByLeague(league.id),
     getLeaguePickBanStats(league.id, 5),
     getLeagueTeamParticipation(league.id),
+    getLeagueChampion(league.id),
   ]);
 
   const highlightMatchIds = [
@@ -138,9 +144,13 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
     .map((entry) => entry.performer?.accountId)
     .filter((value): value is string => Boolean(value));
 
+  const championAccountIds = champion?.roster
+    .map((player) => player.accountId)
+    .filter((value): value is string => Boolean(value)) ?? [];
+
   const [highlightMatches, playerLookup] = await Promise.all([
     getMatchesByIds([...new Set(highlightMatchIds)]),
-    getPlayersByIds(performerAccountIds),
+    getPlayersByIds([...new Set([...performerAccountIds, ...championAccountIds])]),
   ]);
 
   const teamLookup = new Map(teams.map((team) => [team.id, team]));
@@ -168,6 +178,15 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
 
   const topTeam = [...teamParticipation].sort((a, b) => b.winrate - a.winrate)[0];
   const topTeamName = topTeam ? teamLookup.get(topTeam.teamId)?.name ?? null : null;
+
+  const championTeam = champion ? teamLookup.get(champion.winnerTeamId) ?? null : null;
+  const runnerUpTeam = champion?.runnerUpTeamId
+    ? teamLookup.get(champion.runnerUpTeamId) ?? null
+    : null;
+  const showChampion = Boolean(champion && championTeam && !isOngoing);
+  const seriesScoreLabel = champion
+    ? `${champion.winnerWins}–${champion.runnerUpWins}`
+    : null;
   const mostPickedHero = pickBanStats.mostPicked[0];
   const mostPickedHeroName = mostPickedHero
     ? heroLookup.get(mostPickedHero.heroId) ?? null
@@ -345,6 +364,12 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
             </div>
 
             <div className="flex flex-wrap items-start gap-2 md:flex-col md:items-end">
+              {showChampion && championTeam && (
+                <Badge className="border border-amber-400/40 bg-amber-400/10 text-amber-300">
+                  <Crown className="mr-1 h-3 w-3" />
+                  Champion: {championTeam.name}
+                </Badge>
+              )}
               <ShareButton
                 title={league.name}
                 text={leagueShareText}
@@ -357,6 +382,21 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
             </div>
           </div>
         </header>
+
+        {showChampion && champion && championTeam && (
+          <ChampionSpotlight
+            champion={champion}
+            championTeam={championTeam}
+            runnerUpTeam={runnerUpTeam}
+            seriesScoreLabel={seriesScoreLabel ?? ""}
+            heroLookup={heroLookup}
+            playerLookup={playerLookup}
+            buildHeroImageUrl={buildHeroImageUrl}
+            shareTitle={`${championTeam.name} — ${league.name} champion`}
+            shareText={`🏆 ${championTeam.name} won ${league.name}${runnerUpTeam ? ` over ${runnerUpTeam.name}` : ""}${seriesScoreLabel ? ` (${seriesScoreLabel})` : ""} — full league stats on DotaData`}
+            shareUrl={leagueShareUrl}
+          />
+        )}
 
         {!summary.totalMatches ? (
           <Card className="border-border/60 bg-card/80">
@@ -934,5 +974,169 @@ function HighlightCard({
         <p className="pt-1 text-xs">Match ID: {matchId}</p>
       </CardContent>
     </Card>
+  );
+}
+
+interface ChampionSpotlightProps {
+  champion: LeagueChampion;
+  championTeam: Team;
+  runnerUpTeam: Team | null;
+  seriesScoreLabel: string;
+  heroLookup: Map<string, string>;
+  playerLookup: Map<string, string>;
+  buildHeroImageUrl: (heroId: string | null | undefined) => string | null;
+  shareTitle: string;
+  shareText: string;
+  shareUrl: string;
+}
+
+function ChampionSpotlight({
+  champion,
+  championTeam,
+  runnerUpTeam,
+  seriesScoreLabel,
+  heroLookup,
+  playerLookup,
+  buildHeroImageUrl,
+  shareTitle,
+  shareText,
+  shareUrl,
+}: ChampionSpotlightProps) {
+  return (
+    <section
+      aria-labelledby="champion-heading"
+      className="relative overflow-hidden rounded-2xl border border-amber-400/30 bg-gradient-to-br from-amber-500/15 via-amber-500/5 to-background p-6 md:p-8"
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl"
+      />
+      <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-5">
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-amber-400/40 bg-background/70">
+            {championTeam.logoUrl ? (
+              <Image
+                src={championTeam.logoUrl}
+                alt={`${championTeam.name} logo`}
+                width={72}
+                height={72}
+                unoptimized
+                className="h-full w-full object-contain p-1.5"
+              />
+            ) : (
+              <Crown className="h-9 w-9 text-amber-300" />
+            )}
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Crown className="h-4 w-4 text-amber-300" />
+              <p
+                id="champion-heading"
+                className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300"
+              >
+                Champion
+              </p>
+            </div>
+            <h2 className="font-display text-3xl font-semibold text-foreground md:text-4xl">
+              <Link
+                href={`/teams/${championTeam.slug}`}
+                className="transition-colors hover:text-primary"
+              >
+                {championTeam.name}
+              </Link>
+            </h2>
+            {runnerUpTeam && (
+              <p className="text-sm text-muted-foreground">
+                Defeated{" "}
+                <Link
+                  href={`/teams/${runnerUpTeam.slug}`}
+                  className="font-semibold text-foreground transition-colors hover:text-primary"
+                >
+                  {runnerUpTeam.name}
+                </Link>{" "}
+                in the grand final
+                {seriesScoreLabel && (
+                  <>
+                    {" "}
+                    <span className="rounded-md border border-border/60 bg-background/60 px-1.5 py-0.5 font-mono text-xs font-semibold text-foreground">
+                      {seriesScoreLabel}
+                    </span>
+                  </>
+                )}
+              </p>
+            )}
+            {champion.finalMatchStartTime && (
+              <p className="text-xs text-muted-foreground">
+                Final played {formatDate(champion.finalMatchStartTime)}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col items-start gap-2 md:items-end">
+          <ShareButton
+            title={shareTitle}
+            text={shareText}
+            url={shareUrl}
+            variant="compact"
+          />
+          <Link
+            href={`/teams/${championTeam.slug}`}
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            View team page
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+      </div>
+
+      {champion.roster.length > 0 && (
+        <div className="relative mt-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Final-game roster
+          </p>
+          <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {champion.roster.map((player, index) => {
+              const heroName = player.heroId
+                ? heroLookup.get(player.heroId) ?? player.heroId
+                : "Unknown";
+              const heroImage = buildHeroImageUrl(player.heroId);
+              const playerName = player.accountId
+                ? playerLookup.get(player.accountId) ?? `Player ${player.accountId}`
+                : "Unknown";
+              return (
+                <li
+                  key={`${player.accountId ?? "anon"}-${index}`}
+                  className="flex items-center gap-3 rounded-xl border border-border/60 bg-background/60 p-3"
+                >
+                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted">
+                    {heroImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={heroImage}
+                        alt={heroName}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
+                        N/A
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {playerName}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">{heroName}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {player.kills}/{player.deaths}/{player.assists}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }

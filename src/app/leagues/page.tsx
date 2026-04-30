@@ -1,5 +1,7 @@
+import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
+import { Crown } from "lucide-react";
 
 import { ShareButton } from "@/components/share-button";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
-import { getCounts, getLeagueSummaries, getLeagues } from "@/lib/supabase/queries";
+import {
+  getCounts,
+  getLeagueLastWinners,
+  getLeagueSummaries,
+  getLeagues,
+  getTeams,
+} from "@/lib/supabase/queries";
 
 export const metadata = {
   title: "Dota 2 Leagues & Tournaments - Professional Esports Statistics",
@@ -46,14 +54,23 @@ interface LeaguesPageProps {
   searchParams?: Promise<{ search?: string }>;
 }
 
+const isLeagueOver = (endDate: string | null) => {
+  if (!endDate) return false;
+  const parsed = Date.parse(endDate);
+  if (Number.isNaN(parsed)) return false;
+  return parsed <= Date.now();
+};
+
 export default async function LeaguesPage({ searchParams }: LeaguesPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const query = resolvedSearchParams?.search?.toLowerCase().trim() ?? "";
 
-  const [counts, leagues, leagueSummaries] = await Promise.all([
+  const [counts, leagues, leagueSummaries, teams, lastWinners] = await Promise.all([
     getCounts(),
     getLeagues(),
     getLeagueSummaries(),
+    getTeams(),
+    getLeagueLastWinners(),
   ]);
 
   const filteredLeagues = query
@@ -61,6 +78,7 @@ export default async function LeaguesPage({ searchParams }: LeaguesPageProps) {
     : leagues;
 
   const summaryByLeague = new Map(leagueSummaries.map((summary) => [summary.leagueId, summary]));
+  const teamLookup = new Map(teams.map((team) => [team.id, team]));
 
   return (
     <>
@@ -144,6 +162,7 @@ export default async function LeaguesPage({ searchParams }: LeaguesPageProps) {
             <thead className="bg-muted/60">
               <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Champion</th>
                 <th className="px-4 py-3">Start Date</th>
                 <th className="px-4 py-3">End Date</th>
                 <th className="px-4 py-3">Total Matches</th>
@@ -159,10 +178,37 @@ export default async function LeaguesPage({ searchParams }: LeaguesPageProps) {
                   const matchesCount = summary?.totalMatches ?? 0;
                   const teamCount = summary?.totalTeams ?? 0;
                   const radiantRate = summary?.radiantWinrate ?? null;
+                  const lastWinner = lastWinners[league.id];
+                  const championTeam = lastWinner ? teamLookup.get(lastWinner.teamId) : null;
+                  const showChampion = championTeam && isLeagueOver(league.endDate);
                   return (
                     <tr key={league.id} className="border-t border-border/60">
                       <td className="px-4 py-3 font-semibold text-primary">
                         <Link href={`/leagues/${league.slug}`}>{league.name}</Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        {showChampion && championTeam ? (
+                          <Link
+                            href={`/teams/${championTeam.slug}`}
+                            className="inline-flex items-center gap-2 font-medium text-foreground hover:text-primary"
+                          >
+                            {championTeam.logoUrl ? (
+                              <Image
+                                src={championTeam.logoUrl}
+                                alt=""
+                                width={20}
+                                height={20}
+                                unoptimized
+                                className="h-5 w-5 rounded-sm object-contain"
+                              />
+                            ) : (
+                              <Crown className="h-3.5 w-3.5 text-amber-300" />
+                            )}
+                            <span>{championTeam.name}</span>
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{formatDate(league.startDate)}</td>
                       <td className="px-4 py-3 text-muted-foreground">{formatDate(league.endDate)}</td>
@@ -179,7 +225,7 @@ export default async function LeaguesPage({ searchParams }: LeaguesPageProps) {
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
                     No leagues found.
                   </td>
                 </tr>
