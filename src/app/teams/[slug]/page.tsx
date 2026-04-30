@@ -3,6 +3,7 @@ import Image from "next/image";
 import Script from "next/script";
 
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { ShareButton } from "@/components/share-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -152,7 +153,14 @@ export default async function TeamPage({ params }: TeamPageProps) {
       />
 
       <section className="space-y-3">
-        <Badge className="w-fit bg-primary/10 text-primary">Team overview</Badge>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <Badge className="w-fit bg-primary/10 text-primary">Team overview</Badge>
+          <ShareButton
+            title={`${team.name} — Dota 2 Team Stats`}
+            text={`👥 ${team.name}: ${formatNumber(summary.totalMatches)} matches, full history and analytics on DotaData`}
+            url={`/teams/${team.slug}`}
+          />
+        </div>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="font-display text-3xl font-semibold md:text-4xl">{team.name}</h1>

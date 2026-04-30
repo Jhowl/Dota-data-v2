@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { ShareButton } from '@/components/share-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { HandicapGeneralTable } from '@/components/handicap-general-table';
@@ -221,6 +222,11 @@ export default async function PatchHandicapGeneralPage({ params, searchParams }:
                         <Button asChild variant="outline">
                             <Link href={`/patches/${encodeURIComponent(patchEntry.patch)}/handicap`}>Team Comparison</Link>
                         </Button>
+                        <ShareButton
+                            title={`Patch ${patchEntry.patch} Handicap Table`}
+                            text={`📊 Patch ${patchEntry.patch} general handicap table — every team, every handicap level on DotaData`}
+                            url={`/patches/${encodeURIComponent(patchEntry.patch)}/handicap/general`}
+                        />
                     </div>
                 </div>
 

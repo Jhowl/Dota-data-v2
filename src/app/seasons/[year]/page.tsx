@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ExportCsvButton } from "@/components/export-csv-button";
+import { ShareButton } from "@/components/share-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { YearlyMetricLine } from "@/components/charts/yearly-metric-line";
@@ -132,6 +133,11 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <ExportCsvButton href={`/seasons/${seasonYear}/export`} />
             <span className="text-muted-foreground">Download match data for this season.</span>
+            <ShareButton
+              title={`Dota 2 Season ${seasonYear}`}
+              text={`📅 Dota 2 Season ${seasonYear}: ${formatNumber(summary.totalMatches)} matches — leagues, teams, and trends on DotaData`}
+              url={`/seasons/${seasonYear}`}
+            />
           </div>
         </div>
         <h1 className="font-display text-3xl font-semibold md:text-4xl">Dota 2 Season {seasonYear}</h1>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Script from "next/script";
 
+import { ShareButton } from "@/components/share-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -86,7 +87,14 @@ export default async function LeaguesPage({ searchParams }: LeaguesPageProps) {
       </Script>
       <div className="space-y-10">
       <section className="space-y-4">
-        <Badge className="w-fit bg-primary/10 text-primary">Leagues index</Badge>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <Badge className="w-fit bg-primary/10 text-primary">Leagues index</Badge>
+          <ShareButton
+            title="Dota 2 Leagues & Tournaments"
+            text={`🏆 ${formatNumber(counts.leagues)} pro Dota 2 leagues across ${formatNumber(counts.matches)} matches — explore the full index on DotaData`}
+            url="/leagues"
+          />
+        </div>
         <h1 className="font-display text-3xl font-semibold md:text-4xl">Leagues</h1>
         <p className="max-w-2xl text-muted-foreground">
           Explore professional Dota 2 leagues and tournaments with match coverage and event schedules.

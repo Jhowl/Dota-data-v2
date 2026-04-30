@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ShareButton } from "@/components/share-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -231,9 +232,16 @@ export default async function TeamHandicapPage({ params }: TeamHandicapPageProps
               Analyzing {formatNumber(matches.length)} matches with kill handicaps from -16.5 to +16.5.
             </p>
           </div>
-          <Button asChild variant="outline">
-            <Link href={`/teams/${team.slug}`}>Back to Team</Link>
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button asChild variant="outline">
+              <Link href={`/teams/${team.slug}`}>Back to Team</Link>
+            </Button>
+            <ShareButton
+              title={`${team.name} Handicap Analysis`}
+              text={`📊 ${team.name} kill-score handicap analysis across ${formatNumber(matches.length)} matches on DotaData`}
+              url={`/teams/${team.slug}/handicap`}
+            />
+          </div>
         </div>
       </section>
 

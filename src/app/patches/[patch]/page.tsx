@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { YearlyMetricLine } from '@/components/charts/yearly-metric-line';
+import { ShareButton } from '@/components/share-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -295,7 +296,14 @@ export default async function PatchPage({ params }: PatchPageProps) {
     return (
         <div className="space-y-10">
             <section className="space-y-3">
-                <Badge className="w-fit bg-primary/10 text-primary">Patch overview</Badge>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <Badge className="w-fit bg-primary/10 text-primary">Patch overview</Badge>
+                    <ShareButton
+                        title={`Dota 2 Patch ${patchEntry.patch}`}
+                        text={`🔧 Patch ${patchEntry.patch}: ${formatNumber(matches.length)} matches — meta trends and league activity on DotaData`}
+                        url={`/patches/${encodeURIComponent(patchEntry.patch)}`}
+                    />
+                </div>
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <h1 className="font-display text-3xl font-semibold md:text-4xl">Patch {patchEntry.patch}</h1>
                     <div className="flex flex-col gap-2 sm:flex-row">

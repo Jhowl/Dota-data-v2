@@ -1,4 +1,5 @@
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { ShareButton } from "@/components/share-button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 
@@ -72,7 +73,14 @@ export default async function PatchesPage() {
       <Breadcrumbs items={[{ title: "Patches" }]} />
 
       <section className="space-y-4">
-        <Badge className="w-fit bg-primary/10 text-primary">Patch insights</Badge>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <Badge className="w-fit bg-primary/10 text-primary">Patch insights</Badge>
+          <ShareButton
+            title="Dota 2 Patches — Handicap Analysis"
+            text={`🔧 ${formatNumber(patches.length)} Dota 2 patches and ${formatNumber(totalMatches)} matches — handicap analysis on DotaData`}
+            url="/patches"
+          />
+        </div>
         <h1 className="font-display text-3xl font-semibold md:text-4xl">Dota 2 Patches</h1>
         <p className="max-w-2xl text-muted-foreground">
           Select a patch to analyze team handicap statistics and performance data.

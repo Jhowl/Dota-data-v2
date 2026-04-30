@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ShareButton } from "@/components/share-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
@@ -42,7 +43,14 @@ export default async function BlogPage() {
   return (
     <div className="space-y-10">
       <section className="space-y-4">
-        <Badge className="w-fit bg-primary/10 text-primary">Blog</Badge>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <Badge className="w-fit bg-primary/10 text-primary">Blog</Badge>
+          <ShareButton
+            title="DotaData Blog"
+            text="📝 DotaData Blog — patch trends, team dynamics, league recaps, and Dota 2 analytics insights"
+            url="/blog"
+          />
+        </div>
         <h1 className="font-display text-3xl font-semibold md:text-4xl">DotaData Blog</h1>
         <p className="max-w-2xl text-muted-foreground">
           SEO-friendly analysis, strategy insight, and match breakdowns that can be expanded quickly by your AI content agent.

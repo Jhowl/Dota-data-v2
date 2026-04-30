@@ -1,11 +1,57 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import Script from "next/script";
+import { Fragment } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { ShareButton } from "@/components/share-button";
 import { formatDate } from "@/lib/format";
-import { getBlogPostBySlug, getBlogPosts } from "@/lib/blog-posts";
+import {
+  getBlogPostBySlug,
+  getBlogPosts,
+  parseInlines,
+  type BlogInline,
+} from "@/lib/blog-posts";
+
+const isInternalHref = (href: string) => href.startsWith("/") || href.startsWith("#");
+
+const renderInlines = (
+  inlines: BlogInline[] | undefined,
+  fallbackText: string,
+  keyPrefix: string,
+) => {
+  const segments = inlines && inlines.length ? inlines : parseInlines(fallbackText);
+  return segments.map((segment, index) => {
+    const key = `${keyPrefix}-${index}`;
+    if (segment.type === "text") {
+      return <Fragment key={key}>{segment.value}</Fragment>;
+    }
+    if (isInternalHref(segment.href)) {
+      return (
+        <Link
+          key={key}
+          href={segment.href}
+          className="font-medium text-primary underline-offset-4 hover:underline"
+        >
+          {segment.text}
+        </Link>
+      );
+    }
+    return (
+      <a
+        key={key}
+        href={segment.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-medium text-primary underline-offset-4 hover:underline"
+      >
+        {segment.text}
+      </a>
+    );
+  });
+};
 
 const estimateReadingMinutes = (text: string) => {
   const words = text
@@ -118,7 +164,14 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       </Script>
 
       <section className="space-y-4">
-        <Badge className="w-fit bg-primary/10 text-primary">Article</Badge>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <Badge className="w-fit bg-primary/10 text-primary">Article</Badge>
+          <ShareButton
+            title={post.title}
+            text={`📝 ${post.title} — ${post.summary}`}
+            url={`/blog/${post.slug}`}
+          />
+        </div>
         <h1 className="font-display text-3xl font-semibold md:text-4xl">{post.title}</h1>
         <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
           <span>{formatDate(post.publishedAt)}</span>
@@ -141,30 +194,38 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       <Card className="border-border/60 bg-card/80">
         <CardContent className="space-y-5 p-6">
           {post.blocks.map((block, index) => {
+            const blockKey = `${post.slug}-block-${index}`;
+
             if (block.type === "paragraph") {
               return (
-                <p key={`${post.slug}-block-${index}`} className="leading-relaxed text-muted-foreground">
-                  {block.text}
+                <p key={blockKey} className="leading-relaxed text-muted-foreground">
+                  {renderInlines(block.inlines, block.text, blockKey)}
                 </p>
               );
             }
 
             if (block.type === "heading") {
               return block.level === 3 ? (
-                <h3 key={`${post.slug}-block-${index}`} className="text-xl font-semibold">
+                <h3 key={blockKey} className="text-xl font-semibold">
                   {block.text}
                 </h3>
               ) : (
-                <h2 key={`${post.slug}-block-${index}`} className="text-2xl font-semibold">
+                <h2 key={blockKey} className="text-2xl font-semibold">
                   {block.text}
                 </h2>
               );
             }
 
             return (
-              <ul key={`${post.slug}-block-${index}`} className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-                {block.items.map((item) => (
-                  <li key={item}>{item}</li>
+              <ul key={blockKey} className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+                {block.items.map((item, itemIndex) => (
+                  <li key={`${blockKey}-item-${itemIndex}`}>
+                    {renderInlines(
+                      block.itemInlines?.[itemIndex],
+                      item,
+                      `${blockKey}-item-${itemIndex}`,
+                    )}
+                  </li>
                 ))}
               </ul>
             );

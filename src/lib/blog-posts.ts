@@ -5,10 +5,15 @@ import { withRedisCache } from "@/lib/cache/redis";
 
 export type BlogBlockType = "paragraph" | "heading" | "list";
 
+export type BlogInline =
+  | { type: "text"; value: string }
+  | { type: "link"; text: string; href: string };
+
 export type BlogPostBlock =
   | {
       type: "paragraph";
       text: string;
+      inlines: BlogInline[];
     }
   | {
       type: "heading";
@@ -18,7 +23,44 @@ export type BlogPostBlock =
   | {
       type: "list";
       items: string[];
+      itemInlines: BlogInline[][];
     };
+
+const INLINE_LINK_PATTERN = /\[([^\]]+)\]\(([^)]+)\)/g;
+
+export const parseInlines = (raw: string): BlogInline[] => {
+  const segments: BlogInline[] = [];
+  let cursor = 0;
+  INLINE_LINK_PATTERN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = INLINE_LINK_PATTERN.exec(raw)) !== null) {
+    if (match.index > cursor) {
+      const value = raw.slice(cursor, match.index);
+      if (value) segments.push({ type: "text", value });
+    }
+    const text = match[1].trim();
+    const href = match[2].trim();
+    if (text && href) {
+      segments.push({ type: "link", text, href });
+    }
+    cursor = match.index + match[0].length;
+  }
+
+  if (cursor < raw.length) {
+    const tail = raw.slice(cursor);
+    if (tail) segments.push({ type: "text", value: tail });
+  }
+
+  if (!segments.length) {
+    segments.push({ type: "text", value: raw });
+  }
+
+  return segments;
+};
+
+const inlinesToPlainText = (inlines: BlogInline[]): string =>
+  inlines.map((segment) => (segment.type === "text" ? segment.value : segment.text)).join("");
 
 export type BlogPost = {
   slug: string;
@@ -60,7 +102,8 @@ const parseMarkdownToBlocks = (markdown: string): BlogPostBlock[] => {
     }
     const text = paragraphLines.join(" ").trim().replace(/\s+/g, " ");
     if (text) {
-      blocks.push({ type: "paragraph", text });
+      const inlines = parseInlines(text);
+      blocks.push({ type: "paragraph", text: inlinesToPlainText(inlines), inlines });
     }
     paragraphLines = [];
   };
@@ -69,7 +112,9 @@ const parseMarkdownToBlocks = (markdown: string): BlogPostBlock[] => {
     if (!listItems.length) {
       return;
     }
-    blocks.push({ type: "list", items: listItems });
+    const itemInlines = listItems.map((item) => parseInlines(item));
+    const items = itemInlines.map((inlines) => inlinesToPlainText(inlines));
+    blocks.push({ type: "list", items, itemInlines });
     listItems = [];
   };
 
@@ -111,7 +156,8 @@ const parseMarkdownToBlocks = (markdown: string): BlogPostBlock[] => {
   flushList();
 
   if (!blocks.length && markdown.trim()) {
-    blocks.push({ type: "paragraph", text: markdown.trim() });
+    const inlines = parseInlines(markdown.trim());
+    blocks.push({ type: "paragraph", text: inlinesToPlainText(inlines), inlines });
   }
 
   return blocks;

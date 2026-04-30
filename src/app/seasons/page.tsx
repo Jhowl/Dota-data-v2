@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ShareButton } from "@/components/share-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -34,7 +35,14 @@ export default function SeasonsPage() {
   return (
     <div className="space-y-10">
       <section className="space-y-4">
-        <Badge className="w-fit bg-primary/10 text-primary">Season archive</Badge>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <Badge className="w-fit bg-primary/10 text-primary">Season archive</Badge>
+          <ShareButton
+            title="Dota 2 Seasons by Year"
+            text="📅 Dota 2 seasons archive — yearly league coverage, team activity, and trends on DotaData"
+            url="/seasons"
+          />
+        </div>
         <h1 className="font-display text-3xl font-semibold md:text-4xl">Dota 2 Seasons by Year</h1>
         <p className="max-w-2xl text-muted-foreground">
           Explore yearly snapshots of the competitive scene with league coverage, team activity, and monthly trends.
