@@ -1,8 +1,15 @@
+import path from "node:path";
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
+
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const ONE_YEAR = 60 * 60 * 24 * 365;
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: path.resolve(import.meta.dirname),
+  },
   async headers() {
     return [
       {
@@ -27,4 +34,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

@@ -1,15 +1,21 @@
-import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+
+import { Link } from "@/i18n/navigation";
 
 const links = [
-  { href: "/leagues", label: "Leagues" },
-  { href: "/teams", label: "Teams" },
-  { href: "/seasons", label: "Seasons" },
-  { href: "/the-international", label: "The International" },
-  { href: "/patches", label: "Patches" },
-  { href: "/contact", label: "Contact" },
-];
+  { href: "/leagues", labelKey: "leagues" },
+  { href: "/teams", labelKey: "teams" },
+  { href: "/seasons", labelKey: "seasons" },
+  { href: "/the-international", labelKey: "international" },
+  { href: "/patches", labelKey: "patches" },
+  { href: "/contact", labelKey: "contact" },
+] as const;
 
-export function SiteFooter() {
+export async function SiteFooter() {
+  const t = await getTranslations("nav");
+  const tf = await getTranslations("footer");
+  const tc = await getTranslations("common");
+
   return (
     <footer className="border-t border-border/60 bg-background/80">
       <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 md:grid-cols-[1.2fr_1fr] md:px-6">
@@ -18,23 +24,24 @@ export function SiteFooter() {
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
               DD
             </span>
-            DotaData
+            {tc("siteName")}
           </div>
-          <p className="text-sm text-muted-foreground">
-            Competitive Dota 2 data platform focused on leagues, teams, and patch insights. Built for analysts,
-            fans, and esports operators.
-          </p>
+          <p className="text-sm text-muted-foreground">{tf("description")}</p>
         </div>
         <div className="grid grid-cols-2 gap-3 text-sm">
           {links.map((link) => (
-            <Link key={link.href} href={link.href} className="text-muted-foreground hover:text-foreground">
-              {link.label}
+            <Link
+              key={link.href}
+              href={link.href}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              {t(link.labelKey)}
             </Link>
           ))}
         </div>
       </div>
       <div className="border-t border-border/60 py-4 text-center text-xs text-muted-foreground">
-        {new Date().getFullYear()} DotaData. All rights reserved.
+        {new Date().getFullYear()} {tf("rightsReserved")}
       </div>
     </footer>
   );

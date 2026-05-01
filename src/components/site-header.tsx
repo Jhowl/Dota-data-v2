@@ -1,19 +1,25 @@
-import Link from "next/link";
+import { getLocale, getTranslations } from "next-intl/server";
 
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { Link } from "@/i18n/navigation";
 
 const navItems = [
-  { href: "/blog", label: "Blog" },
-  { href: "/leagues", label: "Leagues" },
-  { href: "/teams", label: "Teams" },
-  { href: "/seasons", label: "Seasons" },
-  { href: "/the-international", label: "The International" },
-  { href: "/patches", label: "Patches" },
-  { href: "/contact", label: "Contact" },
-];
+  { href: "/blog", labelKey: "blog" },
+  { href: "/leagues", labelKey: "leagues" },
+  { href: "/teams", labelKey: "teams" },
+  { href: "/seasons", labelKey: "seasons" },
+  { href: "/the-international", labelKey: "international" },
+  { href: "/patches", labelKey: "patches" },
+  { href: "/contact", labelKey: "contact" },
+] as const;
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  const t = await getTranslations("nav");
+  const tc = await getTranslations("common");
+  const locale = await getLocale();
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/60 bg-background/80 backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 md:px-6">
@@ -21,7 +27,7 @@ export function SiteHeader() {
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
             DD
           </span>
-          DotaData
+          {tc("siteName")}
         </Link>
         <nav className="hidden items-center gap-6 text-sm font-medium md:flex">
           {navItems.map((item) => (
@@ -31,14 +37,15 @@ export function SiteHeader() {
               prefetch={false}
               className="text-muted-foreground hover:text-foreground"
             >
-              {item.label}
+              {t(item.labelKey)}
             </Link>
           ))}
         </nav>
         <div className="flex items-center gap-3">
           <Button asChild variant="outline" className="hidden md:inline-flex">
-            <Link href="/leagues">Explore stats</Link>
+            <Link href="/leagues">{tc("exploreStats")}</Link>
           </Button>
+          <LanguageSwitcher currentLocale={locale} />
           <ThemeToggle />
         </div>
       </div>

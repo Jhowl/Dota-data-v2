@@ -1,9 +1,30 @@
 import type { MetadataRoute } from "next";
 
+import { routing } from "@/i18n/routing";
 import { getLeagues, getPatches, getTeams } from "@/lib/supabase/queries";
 import { getBlogPosts } from "@/lib/blog-posts";
 
 const baseUrl = "https://dotadata.com";
+
+const buildAlternates = (path: string) => ({
+  languages: {
+    en: `${baseUrl}${path}`,
+    ru: `${baseUrl}/ru${path}`,
+    "x-default": `${baseUrl}${path}`,
+  },
+});
+
+const localizedEntry = (
+  path: string,
+  options: { changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"]; priority: number; lastModified: Date },
+): MetadataRoute.Sitemap =>
+  routing.locales.map((locale) => ({
+    url: locale === routing.defaultLocale ? `${baseUrl}${path}` : `${baseUrl}/${locale}${path}`,
+    lastModified: options.lastModified,
+    changeFrequency: options.changeFrequency,
+    priority: locale === routing.defaultLocale ? options.priority : Math.max(0.3, options.priority - 0.1),
+    alternates: buildAlternates(path),
+  }));
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [leagues, teams, patches, blogPosts] = await Promise.all([
@@ -16,91 +37,73 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: Math.max(0, currentYear - 2022) }, (_, index) => 2023 + index);
 
-  return [
-    {
-      url: baseUrl,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 1,
-    },
-    {
-      url: `${baseUrl}/leagues`,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/teams`,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/seasons`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/the-international`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/patches`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/contact`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.5,
-    },
-    {
-      url: `${baseUrl}/blog`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.8,
-    },
-    ...blogPosts.map((post) => ({
-      url: `${baseUrl}/blog/${post.slug}`,
-      lastModified: new Date(post.publishedAt),
-      changeFrequency: "monthly" as const,
-      priority: 0.7,
-    })),
-    ...years.map((year) => ({
-      url: `${baseUrl}/seasons/${year}`,
-      lastModified: now,
-      changeFrequency: "weekly" as const,
-      priority: 0.7,
-    })),
-    ...leagues.map((league) => ({
-      url: `${baseUrl}/leagues/${league.slug}`,
-      lastModified: now,
-      changeFrequency: "weekly" as const,
-      priority: 0.7,
-    })),
-    ...leagues.map((league) => ({
-      url: `${baseUrl}/leagues/${league.slug}/pick-ban`,
-      lastModified: now,
-      changeFrequency: "weekly" as const,
-      priority: 0.6,
-    })),
-    ...teams.map((team) => ({
-      url: `${baseUrl}/teams/${team.slug}`,
-      lastModified: now,
-      changeFrequency: "weekly" as const,
-      priority: 0.7,
-    })),
-    ...patches.map((patch) => ({
-      url: `${baseUrl}/patches/${encodeURIComponent(patch.patch)}`,
-      lastModified: now,
-      changeFrequency: "weekly" as const,
-      priority: 0.6,
-    })),
-  ];
-}
+  const entries: MetadataRoute.Sitemap = [];
 
+  entries.push(...localizedEntry("/", { changeFrequency: "daily", priority: 1, lastModified: now }));
+  entries.push(...localizedEntry("/leagues", { changeFrequency: "daily", priority: 0.9, lastModified: now }));
+  entries.push(...localizedEntry("/teams", { changeFrequency: "daily", priority: 0.9, lastModified: now }));
+  entries.push(...localizedEntry("/seasons", { changeFrequency: "weekly", priority: 0.8, lastModified: now }));
+  entries.push(...localizedEntry("/the-international", { changeFrequency: "weekly", priority: 0.8, lastModified: now }));
+  entries.push(...localizedEntry("/patches", { changeFrequency: "weekly", priority: 0.7, lastModified: now }));
+  entries.push(...localizedEntry("/contact", { changeFrequency: "monthly", priority: 0.5, lastModified: now }));
+  entries.push(...localizedEntry("/blog", { changeFrequency: "weekly", priority: 0.8, lastModified: now }));
+
+  blogPosts.forEach((post) => {
+    entries.push(
+      ...localizedEntry(`/blog/${post.slug}`, {
+        changeFrequency: "monthly",
+        priority: 0.7,
+        lastModified: new Date(post.publishedAt),
+      }),
+    );
+  });
+
+  years.forEach((year) => {
+    entries.push(
+      ...localizedEntry(`/seasons/${year}`, {
+        changeFrequency: "weekly",
+        priority: 0.7,
+        lastModified: now,
+      }),
+    );
+  });
+
+  leagues.forEach((league) => {
+    entries.push(
+      ...localizedEntry(`/leagues/${league.slug}`, {
+        changeFrequency: "weekly",
+        priority: 0.7,
+        lastModified: now,
+      }),
+    );
+    entries.push(
+      ...localizedEntry(`/leagues/${league.slug}/pick-ban`, {
+        changeFrequency: "weekly",
+        priority: 0.6,
+        lastModified: now,
+      }),
+    );
+  });
+
+  teams.forEach((team) => {
+    entries.push(
+      ...localizedEntry(`/teams/${team.slug}`, {
+        changeFrequency: "weekly",
+        priority: 0.7,
+        lastModified: now,
+      }),
+    );
+  });
+
+  patches.forEach((patch) => {
+    entries.push(
+      ...localizedEntry(`/patches/${encodeURIComponent(patch.patch)}`, {
+        changeFrequency: "weekly",
+        priority: 0.6,
+        lastModified: now,
+      }),
+    );
+  });
+
+  return entries;
+}
