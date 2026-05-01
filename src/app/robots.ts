@@ -12,7 +12,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: "/api/",
       },
     ],
-    sitemap: "https://dotadata.com/sitemap.xml",
+    sitemap: "https://dotadata.org/sitemap.xml",
   };
 }
 

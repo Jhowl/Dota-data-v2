@@ -84,7 +84,7 @@ export default async function LeaguesPage({ params, searchParams }: LeaguesPageP
           "@context": "https://schema.org",
           "@type": "CollectionPage",
           name: "Dota 2 Leagues",
-          url: "https://dotadata.com/leagues",
+          url: "https://dotadata.org/leagues",
           about: {
             "@type": "Thing",
             name: "Dota 2 leagues and tournaments",
@@ -95,7 +95,7 @@ export default async function LeaguesPage({ params, searchParams }: LeaguesPageP
               "@type": "ListItem",
               position: index + 1,
               name: league.name,
-              url: `https://dotadata.com/leagues/${league.slug}`,
+              url: `https://dotadata.org/leagues/${league.slug}`,
             })),
           },
         })}

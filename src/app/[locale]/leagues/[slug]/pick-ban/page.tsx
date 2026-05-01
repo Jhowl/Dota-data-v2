@@ -247,24 +247,24 @@ export default async function LeaguePickBanPage({ params }: PickBanPageProps) {
           "@context": "https://schema.org",
           "@type": "BreadcrumbList",
           itemListElement: [
-            { "@type": "ListItem", position: 1, name: "Home", item: "https://dotadata.com/" },
+            { "@type": "ListItem", position: 1, name: "Home", item: "https://dotadata.org/" },
             {
               "@type": "ListItem",
               position: 2,
               name: "Leagues",
-              item: "https://dotadata.com/leagues",
+              item: "https://dotadata.org/leagues",
             },
             {
               "@type": "ListItem",
               position: 3,
               name: league.name,
-              item: `https://dotadata.com/leagues/${league.slug}`,
+              item: `https://dotadata.org/leagues/${league.slug}`,
             },
             {
               "@type": "ListItem",
               position: 4,
               name: "Pick & Ban Analysis",
-              item: `https://dotadata.com/leagues/${league.slug}/pick-ban`,
+              item: `https://dotadata.org/leagues/${league.slug}/pick-ban`,
             },
           ],
         })}

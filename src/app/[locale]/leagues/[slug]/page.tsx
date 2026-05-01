@@ -247,14 +247,14 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
           eventStatus: isOngoing
             ? "https://schema.org/EventScheduled"
             : "https://schema.org/EventCompleted",
-          url: `https://dotadata.com/leagues/${league.slug}`,
+          url: `https://dotadata.org/leagues/${league.slug}`,
           description: summary.totalMatches
             ? `${league.name} statistics: ${formatNumber(summary.totalMatches)} matches across ${formatNumber(summary.totalTeams)} teams.`
             : league.name,
           organizer: {
             "@type": "Organization",
             name: "DotaData",
-            url: "https://dotadata.com",
+            url: "https://dotadata.org",
           },
         })}
       </Script>
@@ -264,9 +264,9 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
           "@context": "https://schema.org",
           "@type": "BreadcrumbList",
           itemListElement: [
-            { "@type": "ListItem", position: 1, name: "Home", item: "https://dotadata.com/" },
-            { "@type": "ListItem", position: 2, name: "Leagues", item: "https://dotadata.com/leagues" },
-            { "@type": "ListItem", position: 3, name: league.name, item: `https://dotadata.com/leagues/${league.slug}` },
+            { "@type": "ListItem", position: 1, name: "Home", item: "https://dotadata.org/" },
+            { "@type": "ListItem", position: 2, name: "Leagues", item: "https://dotadata.org/leagues" },
+            { "@type": "ListItem", position: 3, name: league.name, item: `https://dotadata.org/leagues/${league.slug}` },
           ],
         })}
       </Script>

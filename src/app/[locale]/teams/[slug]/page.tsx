@@ -167,12 +167,12 @@ export default async function TeamPage({ params }: TeamPageProps) {
           "@type": "SportsTeam",
           name: team.name,
           sport: "Dota 2",
-          url: `https://dotadata.com/teams/${team.slug}`,
+          url: `https://dotadata.org/teams/${team.slug}`,
           logo: team.logoUrl ?? undefined,
           memberOf: {
             "@type": "Organization",
             name: "DotaData",
-            url: "https://dotadata.com",
+            url: "https://dotadata.org",
           },
         })}
       </Script>

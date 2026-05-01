@@ -163,13 +163,13 @@ export default async function BlogPostPage({
       "@type": "Person",
       name: post.author,
     },
-    mainEntityOfPage: `https://dotadata.com/blog/${post.slug}`,
-    url: `https://dotadata.com/blog/${post.slug}`,
+    mainEntityOfPage: `https://dotadata.org/blog/${post.slug}`,
+    url: `https://dotadata.org/blog/${post.slug}`,
     keywords: post.tags.join(", "),
     publisher: {
       "@type": "Organization",
       name: "DotaData",
-      url: "https://dotadata.com",
+      url: "https://dotadata.org",
     },
   };
 

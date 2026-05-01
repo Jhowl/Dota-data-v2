@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getBlogPosts } from "@/lib/blog-posts";
 
-const BASE_URL = "https://dotadata.com";
+const BASE_URL = "https://dotadata.org";
 
 const escapeXml = (value: string) =>
   value

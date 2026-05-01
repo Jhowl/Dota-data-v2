@@ -125,11 +125,11 @@ export default async function InternationalPage({
           "@type": "EventSeries",
           name: "The International",
           sport: "Dota 2",
-          url: "https://dotadata.com/the-international",
+          url: "https://dotadata.org/the-international",
           organizer: {
             "@type": "Organization",
             name: "DotaData",
-            url: "https://dotadata.com",
+            url: "https://dotadata.org",
           },
         })}
       </Script>

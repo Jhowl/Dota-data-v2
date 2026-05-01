@@ -22,7 +22,7 @@ const monoFont = JetBrains_Mono({
 const GA_MEASUREMENT_ID = "G-NQ2YE7VPYJ";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://dotadata.com"),
+  metadataBase: new URL("https://dotadata.org"),
   icons: {
     icon: [
       { url: "/favicon.ico" },

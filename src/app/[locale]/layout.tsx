@@ -82,13 +82,13 @@ export default async function LocaleLayout({
           "@context": "https://schema.org",
           "@type": "WebSite",
           name: t("siteName"),
-          url: "https://dotadata.com",
+          url: "https://dotadata.org",
           description: t("siteDescription"),
           inLanguage: locale === "ru" ? "ru-RU" : "en-US",
           publisher: {
             "@type": "Organization",
             name: t("siteName"),
-            url: "https://dotadata.com",
+            url: "https://dotadata.org",
           },
         })}
       </Script>

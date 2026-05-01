@@ -4,7 +4,7 @@ import { routing } from "@/i18n/routing";
 import { getLeagues, getPatches, getTeams } from "@/lib/supabase/queries";
 import { getBlogPosts } from "@/lib/blog-posts";
 
-const baseUrl = "https://dotadata.com";
+const baseUrl = "https://dotadata.org";
 
 const buildAlternates = (path: string) => ({
   languages: {

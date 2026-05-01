@@ -69,7 +69,7 @@ export default async function TeamsPage({ params, searchParams }: TeamsPageProps
           "@context": "https://schema.org",
           "@type": "CollectionPage",
           name: "Dota 2 Teams",
-          url: "https://dotadata.com/teams",
+          url: "https://dotadata.org/teams",
           about: {
             "@type": "Thing",
             name: "Dota 2 esports teams",
@@ -80,7 +80,7 @@ export default async function TeamsPage({ params, searchParams }: TeamsPageProps
               "@type": "ListItem",
               position: index + 1,
               name: team.name,
-              url: `https://dotadata.com/teams/${team.slug}`,
+              url: `https://dotadata.org/teams/${team.slug}`,
             })),
           },
         })}

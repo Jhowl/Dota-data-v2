@@ -21,7 +21,7 @@ interface ShareButtonProps {
   variant?: "compact" | "default";
 }
 
-const SITE_ORIGIN = "https://dotadata.com";
+const SITE_ORIGIN = "https://dotadata.org";
 
 const buildFullUrl = (url: string) => {
   if (url.startsWith("http")) return url;
