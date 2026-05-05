@@ -1262,10 +1262,41 @@ export async function getLeagueSummary(leagueId: string): Promise<LeagueSummary 
     }
     return withRedisCache(`league-summary:${encodeCachePart(leagueId)}`, DAY_IN_SECONDS, async () => {
         const { data, error } = await supabaseClient.from('league_snapshots').select('payload').eq('league_id', leagueId).maybeSingle();
-        if (error || !data?.payload) {
+        if (!error && data?.payload) {
+            return data.payload as LeagueSummary;
+        }
+        const { data: viewRow, error: viewError } = await supabaseClient
+            .from('league_summary_view')
+            .select('league_id, total_matches, total_teams, avg_duration, avg_score, avg_first_tower_time, radiant_winrate, last_match_time')
+            .eq('league_id', leagueId)
+            .maybeSingle();
+        if (viewError || !viewRow) {
             return null;
         }
-        return data.payload as LeagueSummary;
+        const totalMatches = Number(viewRow.total_matches ?? 0);
+        if (!totalMatches) {
+            return null;
+        }
+        const toNumberOrNull = (value: unknown) =>
+            value === null || value === undefined ? null : Number(value);
+        return {
+            leagueId: String(viewRow.league_id),
+            totalMatches,
+            totalTeams: toNumberOrNull(viewRow.total_teams),
+            avgDuration: toNumberOrNull(viewRow.avg_duration),
+            avgScore: toNumberOrNull(viewRow.avg_score),
+            radiantWinrate: toNumberOrNull(viewRow.radiant_winrate),
+            avgFirstTowerTime: toNumberOrNull(viewRow.avg_first_tower_time),
+            lastMatchTime: viewRow.last_match_time ?? null,
+            minScore: null,
+            maxScore: null,
+            minScoreMatchId: null,
+            maxScoreMatchId: null,
+            fastestMatchId: null,
+            fastestMatchDuration: null,
+            longestMatchId: null,
+            longestMatchDuration: null,
+        };
     });
 }
 
