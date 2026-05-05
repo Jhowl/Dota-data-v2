@@ -72,6 +72,10 @@
     "patches": "Patches",
     "contact": "Contact"
   },
+  "auth": {
+    "signInSteam": "Sign in with Steam",
+    "signOut": "Sign out"
+  },
   "footer": {
     "description": "Competitive Dota 2 data platform focused on leagues, teams, and patch insights. Built for analysts, fans, and esports operators.",
     "rightsReserved": "DotaData. All rights reserved."

@@ -1,6 +1,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { SiteAuth } from "@/components/site-auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
@@ -45,6 +46,7 @@ export async function SiteHeader() {
           <Button asChild variant="outline" className="hidden md:inline-flex">
             <Link href="/leagues">{tc("exploreStats")}</Link>
           </Button>
+          <SiteAuth />
           <LanguageSwitcher currentLocale={locale} />
           <ThemeToggle />
         </div>
