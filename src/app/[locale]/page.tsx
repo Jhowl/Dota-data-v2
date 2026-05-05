@@ -2,18 +2,23 @@ import { setRequestLocale, getTranslations } from "next-intl/server";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { HomeDashboardTable } from "@/components/home-dashboard-table";
-import { LeagueActivity } from "@/components/charts/league-activity";
-import { YearlyMetrics } from "@/components/charts/yearly-metrics";
-import { YearlyMetricLine } from "@/components/charts/yearly-metric-line";
-import { PatchTrend } from "@/components/charts/patch-trend";
+import { HomeTrends } from "@/components/home-trends";
 import { ShareButton } from "@/components/share-button";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { summarizeMatches } from "@/lib/stats";
-import { getCounts, getLeagues, getMatchesByYear, getPatches } from "@/lib/supabase/queries";
+import {
+  getCounts,
+  getLeagueLastWinners,
+  getLeagues,
+  getMatchesByYear,
+  getPatches,
+  getTeams,
+} from "@/lib/supabase/queries";
+import type { Team } from "@/lib/types";
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -51,6 +56,13 @@ export const revalidate = 86400;
 
 const fmt = (seconds: number) => `${(seconds / 60).toFixed(1)} min`;
 
+const isLeagueOver = (endDate: string | null) => {
+  if (!endDate) return false;
+  const parsed = Date.parse(endDate);
+  if (Number.isNaN(parsed)) return false;
+  return parsed <= Date.now();
+};
+
 export default async function HomePage({
   params,
 }: {
@@ -61,15 +73,18 @@ export default async function HomePage({
   const t = await getTranslations("home");
   const tc = await getTranslations("common");
   const currentYear = new Date().getFullYear();
-  const [counts, leagues, patches, matches] = await Promise.all([
+  const [counts, leagues, patches, matches, teams, lastWinners] = await Promise.all([
     getCounts(),
     getLeagues(),
     getPatches(),
     getMatchesByYear(currentYear),
+    getTeams(),
+    getLeagueLastWinners(),
   ]);
 
   const leagueLookup = new Map(leagues.map((l) => [l.id, l]));
   const patchLookup = new Map(patches.map((p) => [p.id, p]));
+  const teamLookup = new Map(teams.map((team) => [team.id, team]));
 
   const yearSummary = summarizeMatches(matches);
 
@@ -177,7 +192,7 @@ export default async function HomePage({
   const spotlightLeagues = leagueRows.slice(0, 4);
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-10">
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <section className="rounded-2xl border border-border/60 bg-card/80 p-6 md:p-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
@@ -287,9 +302,6 @@ export default async function HomePage({
                 label="Fastest match"
                 value={fmt(yearSummary.fastestMatch.duration)}
                 context={fastestLeague?.name ?? "—"}
-                shareTitle="Fastest pro Dota 2 match"
-                shareText={`⚡ The fastest pro Dota 2 match in ${currentYear}: ${fmt(yearSummary.fastestMatch.duration)} in ${fastestLeague?.name ?? "unknown league"} — check DotaData for more!`}
-                shareUrl={fastestLeague ? `/leagues/${fastestLeague.slug}` : "/leagues"}
                 exploreUrl={fastestLeague ? `/leagues/${fastestLeague.slug}` : "/leagues"}
               />
             )}
@@ -300,9 +312,6 @@ export default async function HomePage({
                 label="Longest match"
                 value={fmt(yearSummary.longestMatch.duration)}
                 context={longestLeague?.name ?? "—"}
-                shareTitle="Longest pro Dota 2 match"
-                shareText={`⏱️ The longest pro Dota 2 marathon in ${currentYear}: ${fmt(yearSummary.longestMatch.duration)} in ${longestLeague?.name ?? "unknown league"} — check DotaData!`}
-                shareUrl={longestLeague ? `/leagues/${longestLeague.slug}` : "/leagues"}
                 exploreUrl={longestLeague ? `/leagues/${longestLeague.slug}` : "/leagues"}
               />
             )}
@@ -313,9 +322,6 @@ export default async function HomePage({
                 label="Highest kill game"
                 value={`${yearSummary.maxScore} kills`}
                 context={maxScoreLeague?.name ?? "—"}
-                shareTitle="Highest kill Dota 2 game"
-                shareText={`💥 The bloodiest pro Dota 2 game in ${currentYear}: ${yearSummary.maxScore} total kills in ${maxScoreLeague?.name ?? "unknown league"} — check DotaData!`}
-                shareUrl={maxScoreLeague ? `/leagues/${maxScoreLeague.slug}` : "/leagues"}
                 exploreUrl={maxScoreLeague ? `/leagues/${maxScoreLeague.slug}` : "/leagues"}
               />
             )}
@@ -326,9 +332,6 @@ export default async function HomePage({
                 label="Most active league"
                 value={`${formatNumber(leagueRows[0].matches)} matches`}
                 context={leagueRows[0].leagueName}
-                shareTitle="Most active Dota 2 tournament"
-                shareText={`🏆 The most active Dota 2 tournament in ${currentYear}: ${leagueRows[0].leagueName} with ${formatNumber(leagueRows[0].matches)} matches — check DotaData!`}
-                shareUrl={`/leagues/${leagueRows[0].leagueSlug}`}
                 exploreUrl={`/leagues/${leagueRows[0].leagueSlug}`}
               />
             )}
@@ -351,65 +354,51 @@ export default async function HomePage({
             </Button>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {spotlightLeagues.map((league) => (
-              <LeagueSpotlightCard key={league.leagueId} league={league} />
-            ))}
+            {spotlightLeagues.map((league) => {
+              const leagueRecord = leagueLookup.get(league.leagueId);
+              const winner = lastWinners[league.leagueId];
+              const champion =
+                winner && leagueRecord && isLeagueOver(leagueRecord.endDate)
+                  ? teamLookup.get(winner.teamId) ?? null
+                  : null;
+              const isOngoing = Boolean(
+                leagueRecord && !isLeagueOver(leagueRecord.endDate),
+              );
+              return (
+                <LeagueSpotlightCard
+                  key={league.leagueId}
+                  league={league}
+                  champion={champion}
+                  isOngoing={isOngoing}
+                />
+              );
+            })}
           </div>
         </section>
       )}
 
       {/* ── Trends ───────────────────────────────────────────────────────── */}
       <section className="space-y-4">
-        <div>
-          <h2 className="font-display text-2xl font-semibold">Trends</h2>
-          <p className="text-sm text-muted-foreground">
-            Monthly season patterns and patch-level signals.
-          </p>
-        </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="border-border/60 bg-card/80">
-            <CardHeader>
-              <CardTitle>{currentYear} Match volume</CardTitle>
-              <p className="text-sm text-muted-foreground">Monthly match count (current year).</p>
-            </CardHeader>
-            <CardContent>
-              <YearlyMetricLine data={matchVolume} color="var(--chart-1)" />
-            </CardContent>
-          </Card>
-          <Card className="border-border/60 bg-card/80">
-            <CardHeader>
-              <CardTitle>{currentYear} Avg duration &amp; kills</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Average duration (minutes) and kills by month.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <YearlyMetrics data={yearlyMetrics} />
-            </CardContent>
-          </Card>
-        </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="border-border/60 bg-card/80">
-            <CardHeader>
-              <CardTitle>Patch trend</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Matches and average duration (min) by patch.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <PatchTrend patches={patches} stats={patchTrendStats} />
-            </CardContent>
-          </Card>
-          <Card className="border-border/60 bg-card/80">
-            <CardHeader>
-              <CardTitle>League activity</CardTitle>
-              <p className="text-sm text-muted-foreground">Match volume across active leagues.</p>
-            </CardHeader>
-            <CardContent>
-              <LeagueActivity leagues={leagues} matches={matches} />
-            </CardContent>
-          </Card>
-        </div>
+        <HomeTrends
+          matchVolume={matchVolume}
+          yearlyMetrics={yearlyMetrics}
+          patches={patches}
+          patchTrendStats={patchTrendStats}
+          leagues={leagues}
+          matches={matches}
+          labels={{
+            title: "Trends",
+            subtitle: "Monthly season patterns and patch-level signals.",
+            matchVolume: `${currentYear} match volume`,
+            matchVolumeDesc: "Monthly match count (current year).",
+            durationKills: "Duration & kills",
+            durationKillsDesc: "Average duration (minutes) and kills by month.",
+            patchTrend: "Patch trend",
+            patchTrendDesc: "Matches and average duration (min) by patch.",
+            leagueActivity: "League activity",
+            leagueActivityDesc: "Match volume across active leagues.",
+          }}
+        />
       </section>
 
       {/* ── League breakdown table ───────────────────────────────────────── */}
@@ -427,26 +416,6 @@ export default async function HomePage({
         </Card>
       </section>
 
-      {/* ── Closing share CTA ────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-border/60 bg-card/80 p-6 text-center md:p-8">
-        <h2 className="font-display text-xl font-semibold md:text-2xl">
-          Share the data
-        </h2>
-        <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
-          Drop these numbers in your scrim chat, draft channel, or community feed — every page
-          on DotaData has a share button so insights travel with one click.
-        </p>
-        <div className="mt-4 flex flex-wrap justify-center gap-3">
-          <ShareButton
-            title="DotaData — Competitive Dota 2 analytics"
-            text={`📊 ${formatNumber(counts.matches)} pro Dota 2 matches across ${formatNumber(counts.leagues)} leagues — explore live stats on DotaData`}
-            url="/"
-          />
-          <Button asChild variant="outline" size="sm">
-            <Link href="/leagues">Browse leagues</Link>
-          </Button>
-        </div>
-      </section>
     </div>
   );
 }
@@ -458,24 +427,15 @@ interface CuriosityCardProps {
   label: string;
   value: string;
   context: string;
-  shareTitle: string;
-  shareText: string;
-  shareUrl: string;
   exploreUrl: string;
 }
 
-function CuriosityCard({
-  icon,
-  label,
-  value,
-  context,
-  shareTitle,
-  shareText,
-  shareUrl,
-  exploreUrl,
-}: CuriosityCardProps) {
+function CuriosityCard({ icon, label, value, context, exploreUrl }: CuriosityCardProps) {
   return (
-    <div className="flex flex-col justify-between rounded-2xl border border-border/60 bg-card/80 p-5">
+    <Link
+      href={exploreUrl}
+      className="group flex flex-col justify-between rounded-2xl border border-border/60 bg-card/80 p-5 transition-colors hover:border-primary/40 hover:bg-card"
+    >
       <div className="space-y-2">
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           <span>{icon}</span>
@@ -484,16 +444,10 @@ function CuriosityCard({
         <p className="text-3xl font-semibold text-primary">{value}</p>
         <p className="truncate text-sm text-muted-foreground">{context}</p>
       </div>
-      <div className="mt-4 flex items-center gap-2">
-        <ShareButton title={shareTitle} text={shareText} url={shareUrl} />
-        <Link
-          href={exploreUrl}
-          className="ml-auto text-xs font-medium text-muted-foreground hover:text-foreground"
-        >
-          View league →
-        </Link>
-      </div>
-    </div>
+      <p className="mt-4 text-xs font-medium text-muted-foreground transition-colors group-hover:text-primary">
+        View league →
+      </p>
+    </Link>
   );
 }
 
@@ -509,30 +463,47 @@ interface LeagueSpotlightCardProps {
     avgScore: number;
     radiantWinRate: number;
   };
+  champion: Team | null;
+  isOngoing: boolean;
 }
 
-function LeagueSpotlightCard({ league }: LeagueSpotlightCardProps) {
-  const shareText = `📊 ${league.leagueName}: ${formatNumber(league.matches)} matches, ${fmt(league.avgDuration)} avg, ${league.avgScore.toFixed(1)} avg kills — full stats on DotaData`;
-
+function LeagueSpotlightCard({ league, champion, isOngoing }: LeagueSpotlightCardProps) {
   return (
-    <div className="group relative flex flex-col rounded-2xl border border-border/60 bg-card/80 p-5 transition-colors hover:border-primary/40 hover:bg-card">
-      <div className="absolute right-4 top-4 z-10">
-        <ShareButton
-          title={league.leagueName}
-          text={shareText}
-          url={`/leagues/${league.leagueSlug}`}
-          variant="compact"
-        />
+    <Link
+      href={`/leagues/${league.leagueSlug}`}
+      className="group flex flex-col rounded-2xl border border-border/60 bg-card/80 p-5 transition-colors hover:border-primary/40 hover:bg-card"
+      aria-label={`View ${league.leagueName} statistics`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="line-clamp-2 font-display text-base font-semibold text-foreground group-hover:text-primary">
+          {league.leagueName}
+        </p>
+        {isOngoing ? (
+          <Badge className="shrink-0 bg-primary/10 text-primary">Live</Badge>
+        ) : null}
       </div>
-      <Link
-        href={`/leagues/${league.leagueSlug}`}
-        className="absolute inset-0 z-0 rounded-2xl"
-        aria-label={`View ${league.leagueName} statistics`}
-      />
-      <p className="relative z-[1] line-clamp-2 max-w-[calc(100%-4rem)] font-display text-base font-semibold text-foreground group-hover:text-primary">
-        {league.leagueName}
-      </p>
-      <div className="relative z-[1] mt-4 grid grid-cols-2 gap-3 pointer-events-none">
+
+      {champion ? (
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-border/60 bg-background/40 px-2.5 py-1.5">
+          {champion.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={champion.logoUrl}
+              alt=""
+              width={20}
+              height={20}
+              className="h-5 w-5 rounded object-contain"
+            />
+          ) : (
+            <span className="text-amber-400">🏆</span>
+          )}
+          <span className="truncate text-xs font-medium text-foreground">
+            {champion.name}
+          </span>
+        </div>
+      ) : null}
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
         {[
           { label: "Matches", value: formatNumber(league.matches) },
           { label: "Avg duration", value: fmt(league.avgDuration) },
@@ -545,9 +516,10 @@ function LeagueSpotlightCard({ league }: LeagueSpotlightCardProps) {
           </div>
         ))}
       </div>
-      <p className="relative z-[1] mt-4 text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100 pointer-events-none">
+
+      <p className="mt-4 text-xs font-medium text-muted-foreground transition-colors group-hover:text-primary">
         Explore full stats →
       </p>
-    </div>
+    </Link>
   );
 }

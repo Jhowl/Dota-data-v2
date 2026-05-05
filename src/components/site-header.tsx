@@ -3,7 +3,6 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { SiteAuth } from "@/components/site-auth";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 
 const navItems = [
@@ -30,22 +29,19 @@ export async function SiteHeader() {
           </span>
           {tc("siteName")}
         </Link>
-        <nav className="hidden items-center gap-6 text-sm font-medium md:flex">
+        <nav className="hidden items-center gap-5 text-sm font-medium lg:flex">
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               prefetch={false}
-              className="text-muted-foreground hover:text-foreground"
+              className="whitespace-nowrap text-muted-foreground hover:text-foreground"
             >
               {t(item.labelKey)}
             </Link>
           ))}
         </nav>
-        <div className="flex items-center gap-3">
-          <Button asChild variant="outline" className="hidden md:inline-flex">
-            <Link href="/leagues">{tc("exploreStats")}</Link>
-          </Button>
+        <div className="flex items-center gap-2">
           <SiteAuth />
           <LanguageSwitcher currentLocale={locale} />
           <ThemeToggle />
