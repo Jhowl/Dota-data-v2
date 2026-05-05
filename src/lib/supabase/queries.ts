@@ -1,8 +1,7 @@
-import { cache } from 'react';
 import { withRedisCache } from '@/lib/cache/redis';
 import { leagues as mockLeagues, matches as mockMatches, patches as mockPatches, teams as mockTeams } from '@/lib/data/mock';
 import { supabase } from '@/lib/supabase/client';
-import { Hero, League, Match, Patch, PickBanEntry, PickBanStat, Team } from '@/lib/types';
+import type { Hero, League, Match, Patch, PickBanEntry, PickBanStat, Team } from '@/lib/types';
 
 const supabaseClient = supabase as NonNullable<typeof supabase>;
 const HOUR_IN_SECONDS = 60 * 60;
@@ -27,6 +26,30 @@ const normalizeIds = (values: Array<string | number | bigint | null | undefined>
     ).sort((left, right) => left.localeCompare(right));
 
 const encodeCachePart = (value: string | number) => encodeURIComponent(String(value));
+
+const isNumericId = (value: string) => /^\d+$/.test(value.trim());
+
+const teamOrFilter = (teamId: string) =>
+    `radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`;
+
+const toNumberOrNull = (value: unknown) =>
+    value === null || value === undefined ? null : Number(value);
+
+const PAGE_SIZE = 1000;
+
+async function paginate<T>(
+    buildPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+    pageSize = PAGE_SIZE,
+): Promise<T[]> {
+    const out: T[] = [];
+    for (let from = 0; ; from += pageSize) {
+        const { data, error } = await buildPage(from, from + pageSize - 1);
+        if (error || !data || data.length === 0) break;
+        out.push(...data);
+        if (data.length < pageSize) break;
+    }
+    return out;
+}
 
 const mapLeague = (row: Record<string, unknown>): League => ({
     id: String(row.league_id ?? row.id ?? ''),
@@ -54,26 +77,23 @@ const mapHero = (row: Record<string, unknown>): Hero => ({
     name: String(row.name ?? ''),
 });
 
-const mapMatch = (row: Record<string, unknown>): Match => {
-
-    return {
-        id: String(row.match_id ?? row.id ?? ''),
-        leagueId: String(row.league_id ?? ''),
-        duration: Number(row.duration ?? 0),
-        startTime: String(row.start_time ?? ''),
-        direScore: Number(row.dire_score ?? 0),
-        radiantScore: Number(row.radiant_score ?? 0),
-        radiantWin: Boolean(row.radiant_win ?? false),
-        seriesType: row.series_type ? String(row.series_type) : null,
-        seriesId: row.series_id ? String(row.series_id) : null,
-        radiantTeamId: row.radiant_team_id ? String(row.radiant_team_id) : null,
-        direTeamId: row.dire_team_id ? String(row.dire_team_id) : null,
-        firstTowerTeamId: row.first_tower_team_id ? String(row.first_tower_team_id) : null,
-        firstTowerTime: row.first_tower_time ? Number(row.first_tower_time) : null,
-        picksBans: Array.isArray(row.picks_bans) ? (row.picks_bans as PickBanEntry[]) : null,
-        patchId: String(row.patch_id ?? ''),
-    };
-};
+const mapMatch = (row: Record<string, unknown>): Match => ({
+    id: String(row.match_id ?? row.id ?? ''),
+    leagueId: String(row.league_id ?? ''),
+    duration: Number(row.duration ?? 0),
+    startTime: String(row.start_time ?? ''),
+    direScore: Number(row.dire_score ?? 0),
+    radiantScore: Number(row.radiant_score ?? 0),
+    radiantWin: Boolean(row.radiant_win ?? false),
+    seriesType: row.series_type ? String(row.series_type) : null,
+    seriesId: row.series_id ? String(row.series_id) : null,
+    radiantTeamId: row.radiant_team_id ? String(row.radiant_team_id) : null,
+    direTeamId: row.dire_team_id ? String(row.dire_team_id) : null,
+    firstTowerTeamId: row.first_tower_team_id ? String(row.first_tower_team_id) : null,
+    firstTowerTime: row.first_tower_time ? Number(row.first_tower_time) : null,
+    picksBans: Array.isArray(row.picks_bans) ? (row.picks_bans as PickBanEntry[]) : null,
+    patchId: String(row.patch_id ?? ''),
+});
 
 export async function getCounts(): Promise<{ leagues: number; teams: number; matches: number; heroes: number }> {
     if (!supabase) {
@@ -177,37 +197,18 @@ export async function getTeams(): Promise<Team[]> {
         }
 
         const teams = data.map((row) => mapTeam(row as Record<string, unknown>));
-        const teamIds = new Set(teams.map((team) => team.id));
+
+        const { data: viewRows } = await supabaseClient
+            .from('team_summary_view')
+            .select('team_id,last_match_time');
+
         const latestMatchByTeam = new Map<string, number>();
-
-        const pageSize = 1000;
-        let from = 0;
-
-        while (latestMatchByTeam.size < teamIds.size) {
-            const { data: matchRows, error: matchError } = await supabaseClient
-                .from('matches')
-                .select('start_time,radiant_team_id,dire_team_id')
-                .order('start_time', { ascending: false })
-                .range(from, from + pageSize - 1);
-
-            if (matchError || !matchRows?.length) {
-                break;
+        for (const row of (viewRows as Array<Record<string, unknown>> | null) ?? []) {
+            const id = row.team_id ? String(row.team_id) : '';
+            const ts = Date.parse(String(row.last_match_time ?? ''));
+            if (id && Number.isFinite(ts)) {
+                latestMatchByTeam.set(id, ts);
             }
-
-            (matchRows as Array<Record<string, unknown>>).forEach((row) => {
-                const timeValue = Date.parse(String(row.start_time ?? ''));
-                const radiantId = row.radiant_team_id ? String(row.radiant_team_id) : null;
-                const direId = row.dire_team_id ? String(row.dire_team_id) : null;
-
-                if (radiantId && teamIds.has(radiantId) && !latestMatchByTeam.has(radiantId) && Number.isFinite(timeValue)) {
-                    latestMatchByTeam.set(radiantId, timeValue);
-                }
-                if (direId && teamIds.has(direId) && !latestMatchByTeam.has(direId) && Number.isFinite(timeValue)) {
-                    latestMatchByTeam.set(direId, timeValue);
-                }
-            });
-
-            from += pageSize;
         }
 
         return teams.sort((a, b) => {
@@ -277,62 +278,6 @@ export async function getPatches(): Promise<Patch[]> {
     });
 }
 
-export const getPatchTrendStats = cache(async (): Promise<Array<{ patchId: string; matches: number; avgDuration: number }>> => {
-    if (!supabase) {
-        const totals = new Map<string, { matches: number; durationSum: number }>();
-        mockMatches.forEach((match) => {
-            const entry = totals.get(match.patchId) ?? { matches: 0, durationSum: 0 };
-            entry.matches += 1;
-            entry.durationSum += match.duration;
-            totals.set(match.patchId, entry);
-        });
-
-        return Array.from(totals.entries()).map(([patchId, entry]) => ({
-            patchId,
-            matches: entry.matches,
-            avgDuration: entry.matches ? entry.durationSum / entry.matches / 60 : 0,
-        }));
-    }
-
-    const totals = new Map<string, { matches: number; durationSum: number }>();
-    const pageSize = 1000;
-    let from = 0;
-
-    while (true) {
-        const { data, error } = await supabaseClient
-            .from('matches')
-            .select('patch_id,duration')
-            .range(from, from + pageSize - 1);
-
-        if (error) {
-            break;
-        }
-
-        if (!data?.length) {
-            break;
-        }
-
-        data.forEach((row) => {
-            const patchId = row.patch_id ? String(row.patch_id) : '';
-            if (!patchId) {
-                return;
-            }
-            const entry = totals.get(patchId) ?? { matches: 0, durationSum: 0 };
-            entry.matches += 1;
-            entry.durationSum += Number(row.duration ?? 0);
-            totals.set(patchId, entry);
-        });
-
-        from += pageSize;
-    }
-
-    return Array.from(totals.entries()).map(([patchId, entry]) => ({
-        patchId,
-        matches: entry.matches,
-        avgDuration: entry.matches ? entry.durationSum / entry.matches / 60 : 0,
-    }));
-});
-
 export type PatchWithCount = Patch & { matchCount: number };
 
 export async function getPatchesWithCounts(): Promise<PatchWithCount[]> {
@@ -392,33 +337,17 @@ export async function getMatchesByPatch(patchId: string): Promise<Match[]> {
     }
 
     return withRedisCache(`matches:patch:${encodeCachePart(patchId)}`, HOUR_IN_SECONDS, async () => {
-        const results: Match[] = [];
-        const pageSize = 1000;
-        let from = 0;
-
-        while (true) {
-            const { data, error } = await supabaseClient
+        const rows = await paginate<Record<string, unknown>>((from, to) =>
+            supabaseClient
                 .from('matches')
                 .select(
                     'match_id,league_id,start_time,duration,dire_score,radiant_score,radiant_win,series_id,series_type,radiant_team_id,dire_team_id,first_tower_time,patch_id,picks_bans',
                 )
                 .eq('patch_id', patchId)
                 .order('start_time', { ascending: false })
-                .range(from, from + pageSize - 1);
-
-            if (error) {
-                break;
-            }
-
-            if (!data?.length) {
-                break;
-            }
-
-            results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
-            from += pageSize;
-        }
-
-        return results;
+                .range(from, to),
+        );
+        return rows.map(mapMatch);
     });
 }
 
@@ -469,26 +398,6 @@ export async function getPlayersByIds(ids: Array<string | number | null | undefi
 
     rows.forEach((row) => result.set(row.id, row.name));
     return result;
-}
-
-export async function getRecentMatches(limit = 8): Promise<Match[]> {
-    if (!supabase) {
-        return mockMatches.slice(0, limit);
-    }
-
-    return withRedisCache(`matches:recent:${limit}`, HOUR_IN_SECONDS, async () => {
-        const { data, error } = await supabaseClient
-            .from('matches')
-            .select('match_id,league_id,start_time,duration,radiant_score,dire_score,radiant_win,series_id,series_type,radiant_team_id,dire_team_id,patch_id')
-            .order('start_time', { ascending: false })
-            .limit(limit);
-
-        if (error || !data) {
-            return mockMatches.slice(0, limit);
-        }
-
-        return data.map((row) => mapMatch(row as Record<string, unknown>));
-    });
 }
 
 export type TopPerformer = {
@@ -614,68 +523,42 @@ const summarizeTopPerformers = (rows: Array<Record<string, unknown>>): TopPerfor
     });
 };
 
-const collectTopPerformerRows = async (
-    loadPage: (from: number, to: number) => Promise<{ data: unknown[] | null; error: unknown }>,
-): Promise<Array<Record<string, unknown>>> => {
-    const rows: Array<Record<string, unknown>> = [];
-    let from = 0;
-
-    while (true) {
-        const to = from + TOP_PERFORMER_PAGE_SIZE - 1;
-        const { data, error } = await loadPage(from, to);
-
-        if (error || !data?.length) {
-            break;
-        }
-
-        rows.push(...(data as Array<Record<string, unknown>>));
-
-        if (data.length < TOP_PERFORMER_PAGE_SIZE) {
-            break;
-        }
-
-        from += TOP_PERFORMER_PAGE_SIZE;
-    }
-
-    return rows;
-};
-
 export async function getTopPerformersByLeague(leagueId: string): Promise<TopPerformerStat[]> {
-    const client = supabase;
-    if (!client || !leagueId) {
+    if (!supabase || !leagueId) {
         return emptyTopPerformerStats();
     }
 
     return withRedisCache(`top-performers:league:v2:${encodeCachePart(leagueId)}`, SIX_HOURS_IN_SECONDS, async () => {
-        const rows = await collectTopPerformerRows(async (from, to) =>
-            await client
-                .from('player_matches')
-                .select(`${TOP_PERFORMER_ROW_SELECT},matches!inner(league_id)`)
-                .eq('matches.league_id', leagueId)
-                .order('id', { ascending: true })
-                .range(from, to),
+        const rows = await paginate<Record<string, unknown>>(
+            (from, to) =>
+                supabaseClient
+                    .from('player_matches')
+                    .select(`${TOP_PERFORMER_ROW_SELECT},matches!inner(league_id)`)
+                    .eq('matches.league_id', leagueId)
+                    .order('id', { ascending: true })
+                    .range(from, to),
+            TOP_PERFORMER_PAGE_SIZE,
         );
-
         return summarizeTopPerformers(rows);
     });
 }
 
 export async function getTopPerformersByTeam(teamId: string): Promise<TopPerformerStat[]> {
-    const client = supabase;
-    if (!client || !teamId) {
+    if (!supabase || !teamId) {
         return emptyTopPerformerStats();
     }
 
     return withRedisCache(`top-performers:team:v2:${encodeCachePart(teamId)}`, SIX_HOURS_IN_SECONDS, async () => {
-        const rows = await collectTopPerformerRows(async (from, to) =>
-            await client
-                .from('player_matches')
-                .select(TOP_PERFORMER_ROW_SELECT)
-                .eq('team_id', teamId)
-                .order('id', { ascending: true })
-                .range(from, to),
+        const rows = await paginate<Record<string, unknown>>(
+            (from, to) =>
+                supabaseClient
+                    .from('player_matches')
+                    .select(TOP_PERFORMER_ROW_SELECT)
+                    .eq('team_id', teamId)
+                    .order('id', { ascending: true })
+                    .range(from, to),
+            TOP_PERFORMER_PAGE_SIZE,
         );
-
         return summarizeTopPerformers(rows);
     });
 }
@@ -686,31 +569,27 @@ export async function getLeagueTeamParticipation(leagueId: string): Promise<Leag
     }
 
     return withRedisCache(`league-team-participation:${encodeCachePart(leagueId)}`, SIX_HOURS_IN_SECONDS, async () => {
-        const pageSize = 1000;
-        let from = 0;
-        const matchRows: Array<Record<string, unknown>> = [];
-
-        while (true) {
-            const { data, error } = await supabaseClient
-                .from('matches')
-                .select('radiant_team_id,dire_team_id,radiant_win')
-                .eq('league_id', leagueId)
-                .order('match_id', { ascending: false })
-                .range(from, from + pageSize - 1);
-
-            if (error) {
-                break;
-            }
-            if (!data?.length) {
-                break;
-            }
-            matchRows.push(...data);
-            from += pageSize;
-        }
+        const [matchRows, playerMatchRows] = await Promise.all([
+            paginate<Record<string, unknown>>((from, to) =>
+                supabaseClient
+                    .from('matches')
+                    .select('radiant_team_id,dire_team_id,radiant_win')
+                    .eq('league_id', leagueId)
+                    .order('match_id', { ascending: false })
+                    .range(from, to),
+            ),
+            paginate<Record<string, unknown>>((from, to) =>
+                supabaseClient
+                    .from('player_matches')
+                    .select('id,team_id,hero_id,matches!inner(league_id)')
+                    .eq('matches.league_id', leagueId)
+                    .order('id', { ascending: true })
+                    .range(from, to),
+            ),
+        ]);
 
         const teamStats = new Map<string, { matches: number; wins: number }>();
-
-        matchRows.forEach((match) => {
+        for (const match of matchRows) {
             const radiantId = match.radiant_team_id ? String(match.radiant_team_id) : null;
             const direId = match.dire_team_id ? String(match.dire_team_id) : null;
             const radiantWin = Boolean(match.radiant_win);
@@ -718,57 +597,28 @@ export async function getLeagueTeamParticipation(leagueId: string): Promise<Leag
             if (radiantId) {
                 const stats = teamStats.get(radiantId) ?? { matches: 0, wins: 0 };
                 stats.matches += 1;
-                if (radiantWin) {
-                    stats.wins += 1;
-                }
+                if (radiantWin) stats.wins += 1;
                 teamStats.set(radiantId, stats);
             }
-
             if (direId) {
                 const stats = teamStats.get(direId) ?? { matches: 0, wins: 0 };
                 stats.matches += 1;
-                if (!radiantWin) {
-                    stats.wins += 1;
-                }
+                if (!radiantWin) stats.wins += 1;
                 teamStats.set(direId, stats);
             }
-        });
+        }
 
         const heroStats = new Map<string, Map<string, number>>();
-        let heroFrom = 0;
-
-        while (true) {
-            const { data, error } = await supabaseClient
-                .from('player_matches')
-                .select('id,team_id,hero_id,matches!inner(league_id)')
-                .eq('matches.league_id', leagueId)
-                .order('id', { ascending: true })
-                .range(heroFrom, heroFrom + pageSize - 1);
-
-            if (error) {
-                break;
+        for (const row of playerMatchRows) {
+            const teamId = row.team_id ? String(row.team_id) : null;
+            const heroId = row.hero_id ? String(row.hero_id) : null;
+            if (!teamId || !heroId) continue;
+            let teamHeroes = heroStats.get(teamId);
+            if (!teamHeroes) {
+                teamHeroes = new Map();
+                heroStats.set(teamId, teamHeroes);
             }
-            if (!data?.length) {
-                break;
-            }
-
-            data.forEach((row) => {
-                const teamId = row.team_id ? String(row.team_id) : null;
-                const heroId = row.hero_id ? String(row.hero_id) : null;
-                if (!teamId || !heroId) {
-                    return;
-                }
-                if (!heroStats.has(teamId)) {
-                    heroStats.set(teamId, new Map());
-                }
-                const teamHeroes = heroStats.get(teamId);
-                if (!teamHeroes) {
-                    return;
-                }
-                teamHeroes.set(heroId, (teamHeroes.get(heroId) ?? 0) + 1);
-            });
-
-            heroFrom += pageSize;
+            teamHeroes.set(heroId, (teamHeroes.get(heroId) ?? 0) + 1);
         }
 
         const participation: LeagueTeamParticipation[] = Array.from(teamStats.entries()).map(([teamId, stats]) => {
@@ -802,8 +652,7 @@ export async function getLeagueChampion(leagueId: string): Promise<LeagueChampio
     }
 
     return withRedisCache(`league-champion:v1:${encodeCachePart(leagueId)}`, SIX_HOURS_IN_SECONDS, async () => {
-        const pageSize = 1000;
-        const matchRows: Array<{
+        type MatchRow = {
             match_id: string;
             start_time: string | null;
             series_id: string | null;
@@ -811,38 +660,24 @@ export async function getLeagueChampion(leagueId: string): Promise<LeagueChampio
             radiant_team_id: string | null;
             dire_team_id: string | null;
             radiant_win: boolean;
-        }> = [];
-
-        let from = 0;
-        while (true) {
-            const { data, error } = await supabaseClient
+        };
+        const rawRows = await paginate<Record<string, unknown>>((from, to) =>
+            supabaseClient
                 .from('matches')
                 .select('match_id,start_time,series_id,series_type,radiant_team_id,dire_team_id,radiant_win')
                 .eq('league_id', leagueId)
                 .order('start_time', { ascending: false })
-                .range(from, from + pageSize - 1);
-
-            if (error || !data?.length) {
-                break;
-            }
-
-            data.forEach((row) => {
-                matchRows.push({
-                    match_id: row.match_id ? String(row.match_id) : '',
-                    start_time: (row.start_time as string | null) ?? null,
-                    series_id: row.series_id ? String(row.series_id) : null,
-                    series_type: (row.series_type as string | null) ?? null,
-                    radiant_team_id: row.radiant_team_id ? String(row.radiant_team_id) : null,
-                    dire_team_id: row.dire_team_id ? String(row.dire_team_id) : null,
-                    radiant_win: Boolean(row.radiant_win),
-                });
-            });
-
-            if (data.length < pageSize) {
-                break;
-            }
-            from += pageSize;
-        }
+                .range(from, to),
+        );
+        const matchRows: MatchRow[] = rawRows.map((row) => ({
+            match_id: row.match_id ? String(row.match_id) : '',
+            start_time: (row.start_time as string | null) ?? null,
+            series_id: row.series_id ? String(row.series_id) : null,
+            series_type: (row.series_type as string | null) ?? null,
+            radiant_team_id: row.radiant_team_id ? String(row.radiant_team_id) : null,
+            dire_team_id: row.dire_team_id ? String(row.dire_team_id) : null,
+            radiant_win: Boolean(row.radiant_win),
+        }));
 
         if (!matchRows.length) {
             return null;
@@ -966,63 +801,46 @@ export async function getLeagueLastWinners(): Promise<Record<string, LeagueLastW
     }
 
     return withRedisCache('league-last-winners:v1', SIX_HOURS_IN_SECONDS, async () => {
-        const map: Record<string, LeagueLastWinner> = {};
-        const pageSize = 1000;
-        let from = 0;
-
-        while (true) {
-            const { data, error } = await supabaseClient
+        const rows = await paginate<Record<string, unknown>>((from, to) =>
+            supabaseClient
                 .from('matches')
                 .select('league_id,match_id,start_time,radiant_team_id,dire_team_id,radiant_win')
                 .order('start_time', { ascending: false })
-                .range(from, from + pageSize - 1);
+                .range(from, to),
+        );
 
-            if (error || !data?.length) {
-                break;
-            }
-
-            data.forEach((row) => {
-                const leagueId = row.league_id ? String(row.league_id) : '';
-                if (!leagueId || map[leagueId]) {
-                    return;
-                }
-                const winnerTeamId = row.radiant_win ? row.radiant_team_id : row.dire_team_id;
-                if (!winnerTeamId) {
-                    return;
-                }
-                map[leagueId] = {
-                    teamId: String(winnerTeamId),
-                    matchId: row.match_id ? String(row.match_id) : '',
-                    startTime: (row.start_time as string | null) ?? null,
-                };
-            });
-
-            if (data.length < pageSize) {
-                break;
-            }
-            from += pageSize;
+        const map: Record<string, LeagueLastWinner> = {};
+        for (const row of rows) {
+            const leagueId = row.league_id ? String(row.league_id) : '';
+            if (!leagueId || map[leagueId]) continue;
+            const winnerTeamId = row.radiant_win ? row.radiant_team_id : row.dire_team_id;
+            if (!winnerTeamId) continue;
+            map[leagueId] = {
+                teamId: String(winnerTeamId),
+                matchId: row.match_id ? String(row.match_id) : '',
+                startTime: (row.start_time as string | null) ?? null,
+            };
         }
-
         return map;
     });
 }
 
 export async function getTopPerformersByPatch(patchId: string): Promise<TopPerformerStat[]> {
-    const client = supabase;
-    if (!client || !patchId) {
+    if (!supabase || !patchId) {
         return emptyTopPerformerStats();
     }
 
     return withRedisCache(`top-performers:patch:v2:${encodeCachePart(patchId)}`, SIX_HOURS_IN_SECONDS, async () => {
-        const rows = await collectTopPerformerRows(async (from, to) =>
-            await client
-                .from('player_matches')
-                .select(`${TOP_PERFORMER_ROW_SELECT},matches!inner(patch_id)`)
-                .eq('matches.patch_id', patchId)
-                .order('id', { ascending: true })
-                .range(from, to),
+        const rows = await paginate<Record<string, unknown>>(
+            (from, to) =>
+                supabaseClient
+                    .from('player_matches')
+                    .select(`${TOP_PERFORMER_ROW_SELECT},matches!inner(patch_id)`)
+                    .eq('matches.patch_id', patchId)
+                    .order('id', { ascending: true })
+                    .range(from, to),
+            TOP_PERFORMER_PAGE_SIZE,
         );
-
         return summarizeTopPerformers(rows);
     });
 }
@@ -1058,33 +876,17 @@ export async function getAllMatchesByLeague(leagueId: string): Promise<Match[]> 
     }
 
     return withRedisCache(`matches:league-all:${encodeCachePart(leagueId)}`, HOUR_IN_SECONDS, async () => {
-        const results: Match[] = [];
-        const pageSize = 1000;
-        let from = 0;
-
-        while (true) {
-            const { data, error } = await supabaseClient
+        const rows = await paginate<Record<string, unknown>>((from, to) =>
+            supabaseClient
                 .from('matches')
                 .select(
                     'match_id,league_id,start_time,dire_score,radiant_score,radiant_win,series_id,series_type,radiant_team_id,dire_team_id,patch_id,duration',
                 )
                 .eq('league_id', leagueId)
                 .order('start_time', { ascending: false })
-                .range(from, from + pageSize - 1);
-
-            if (error) {
-                break;
-            }
-
-            if (!data?.length) {
-                break;
-            }
-
-            results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
-            from += pageSize;
-        }
-
-        return results;
+                .range(from, to),
+        );
+        return rows.map(mapMatch);
     });
 }
 
@@ -1092,12 +894,13 @@ export async function getMatchesByTeam(teamId: string, limit = 10): Promise<Matc
     if (!supabase) {
         return mockMatches.filter((match) => match.radiantTeamId === teamId || match.direTeamId === teamId).slice(0, limit);
     }
+    if (!isNumericId(teamId)) return [];
 
     return withRedisCache(`matches:team:${encodeCachePart(teamId)}:${limit}`, HOUR_IN_SECONDS, async () => {
         const { data, error } = await supabaseClient
             .from('matches')
             .select('match_id,league_id,start_time,duration,dire_score,radiant_score,radiant_win,series_id,series_type,radiant_team_id,dire_team_id,first_tower_time,patch_id')
-            .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`)
+            .or(teamOrFilter(teamId))
             .order('start_time', { ascending: false })
             .limit(limit);
 
@@ -1117,33 +920,18 @@ export async function getMatchesByTeamForHandicap(teamId: string): Promise<Match
     if (!supabase) {
         return mockMatches.filter((match) => match.radiantTeamId === teamId || match.direTeamId === teamId);
     }
+    if (!isNumericId(teamId)) return [];
 
     return withRedisCache(`matches:team-handicap:${encodeCachePart(teamId)}`, HOUR_IN_SECONDS, async () => {
-        const results: Match[] = [];
-        const pageSize = 1000;
-        let from = 0;
-
-        while (true) {
-            const { data, error } = await supabaseClient
+        const rows = await paginate<Record<string, unknown>>((from, to) =>
+            supabaseClient
                 .from('matches')
                 .select('match_id,league_id,radiant_team_id,dire_team_id,radiant_score,dire_score,radiant_win,patch_id')
-                .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`)
+                .or(teamOrFilter(teamId))
                 .order('match_id', { ascending: false })
-                .range(from, from + pageSize - 1);
-
-            if (error) {
-                break;
-            }
-
-            if (!data?.length) {
-                break;
-            }
-
-            results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
-            from += pageSize;
-        }
-
-        return results;
+                .range(from, to),
+        );
+        return rows.map(mapMatch);
     });
 }
 
@@ -1161,31 +949,15 @@ export async function getMatchesByLeagueIds(leagueIds: string[]): Promise<Match[
         `matches:league-ids:${normalizedLeagueIds.map(encodeCachePart).join(',')}`,
         HOUR_IN_SECONDS,
         async () => {
-            const results: Match[] = [];
-            const pageSize = 1000;
-            let from = 0;
-
-            while (true) {
-                const { data, error } = await supabaseClient
+            const rows = await paginate<Record<string, unknown>>((from, to) =>
+                supabaseClient
                     .from('matches')
                     .select('match_id,league_id,start_time,duration,dire_score,radiant_score,radiant_win,series_id,series_type,radiant_team_id,dire_team_id,first_tower_time,patch_id')
                     .in('league_id', normalizedLeagueIds)
                     .order('start_time', { ascending: false })
-                    .range(from, from + pageSize - 1);
-
-                if (error) {
-                    break;
-                }
-
-                if (!data?.length) {
-                    break;
-                }
-
-                results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
-                from += pageSize;
-            }
-
-            return results;
+                    .range(from, to),
+            );
+            return rows.map(mapMatch);
         },
     );
 }
@@ -1226,35 +998,71 @@ export async function getMatchesByYear(year: number): Promise<Match[]> {
     const end = `${year + 1}-01-01`;
 
     return withRedisCache(`matches:year:${year}`, HOUR_IN_SECONDS, async () => {
-        const results: Match[] = [];
-        const pageSize = 1000;
-        let from = 0;
-
-        while (true) {
-        const { data, error } = await supabaseClient
-            .from('matches')
-            .select('match_id,league_id,start_time,duration,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,first_tower_time,patch_id,series_id,series_type')
-            .gte('start_time', start)
-            .lt('start_time', end)
-            .order('start_time', { ascending: true })
-                .range(from, from + pageSize - 1);
-
-            if (error) {
-                console.error('Error fetching matches by year:', error);
-                break;
-            }
-
-            if (!data?.length) {
-                break;
-            }
-
-            results.push(...data.map((row) => mapMatch(row as Record<string, unknown>)));
-            from += pageSize;
-        }
-
-        return results;
+        const rows = await paginate<Record<string, unknown>>((from, to) =>
+            supabaseClient
+                .from('matches')
+                .select('match_id,league_id,start_time,duration,dire_score,radiant_score,radiant_win,radiant_team_id,dire_team_id,first_tower_time,patch_id,series_id,series_type')
+                .gte('start_time', start)
+                .lt('start_time', end)
+                .order('start_time', { ascending: true })
+                .range(from, to),
+        );
+        return rows.map(mapMatch);
     });
 }
+
+const LEAGUE_VIEW_COLUMNS =
+    'league_id, total_matches, total_teams, avg_duration, avg_score, avg_first_tower_time, radiant_winrate, last_match_time';
+const TEAM_VIEW_COLUMNS =
+    'team_id, total_matches, avg_duration, avg_score, radiant_matches, dire_matches, radiant_winrate, dire_winrate, last_match_time';
+
+const mapLeagueSummaryView = (row: Record<string, unknown>): LeagueSummary | null => {
+    const totalMatches = Number(row.total_matches ?? 0);
+    if (!totalMatches) return null;
+    return {
+        leagueId: String(row.league_id),
+        totalMatches,
+        totalTeams: toNumberOrNull(row.total_teams),
+        avgDuration: toNumberOrNull(row.avg_duration),
+        avgScore: toNumberOrNull(row.avg_score),
+        radiantWinrate: toNumberOrNull(row.radiant_winrate),
+        avgFirstTowerTime: toNumberOrNull(row.avg_first_tower_time),
+        lastMatchTime: (row.last_match_time as string | null) ?? null,
+        minScore: null,
+        maxScore: null,
+        minScoreMatchId: null,
+        maxScoreMatchId: null,
+        fastestMatchId: null,
+        fastestMatchDuration: null,
+        longestMatchId: null,
+        longestMatchDuration: null,
+    };
+};
+
+const mapTeamSummaryView = (row: Record<string, unknown>): TeamSummary | null => {
+    const totalMatches = Number(row.total_matches ?? 0);
+    if (!totalMatches) return null;
+    return {
+        teamId: String(row.team_id),
+        totalMatches,
+        avgDuration: toNumberOrNull(row.avg_duration),
+        avgScore: toNumberOrNull(row.avg_score),
+        avgFirstTowerTime: null,
+        radiantMatches: toNumberOrNull(row.radiant_matches),
+        direMatches: toNumberOrNull(row.dire_matches),
+        radiantWinrate: toNumberOrNull(row.radiant_winrate),
+        direWinrate: toNumberOrNull(row.dire_winrate),
+        lastMatchTime: (row.last_match_time as string | null) ?? null,
+        minScore: null,
+        maxScore: null,
+        minScoreMatchId: null,
+        maxScoreMatchId: null,
+        fastestMatchId: null,
+        fastestMatchDuration: null,
+        longestMatchId: null,
+        longestMatchDuration: null,
+    };
+};
 
 export async function getLeagueSummary(leagueId: string): Promise<LeagueSummary | null> {
     if (!supabase || !leagueId) {
@@ -1267,36 +1075,11 @@ export async function getLeagueSummary(leagueId: string): Promise<LeagueSummary 
         }
         const { data: viewRow, error: viewError } = await supabaseClient
             .from('league_summary_view')
-            .select('league_id, total_matches, total_teams, avg_duration, avg_score, avg_first_tower_time, radiant_winrate, last_match_time')
+            .select(LEAGUE_VIEW_COLUMNS)
             .eq('league_id', leagueId)
             .maybeSingle();
-        if (viewError || !viewRow) {
-            return null;
-        }
-        const totalMatches = Number(viewRow.total_matches ?? 0);
-        if (!totalMatches) {
-            return null;
-        }
-        const toNumberOrNull = (value: unknown) =>
-            value === null || value === undefined ? null : Number(value);
-        return {
-            leagueId: String(viewRow.league_id),
-            totalMatches,
-            totalTeams: toNumberOrNull(viewRow.total_teams),
-            avgDuration: toNumberOrNull(viewRow.avg_duration),
-            avgScore: toNumberOrNull(viewRow.avg_score),
-            radiantWinrate: toNumberOrNull(viewRow.radiant_winrate),
-            avgFirstTowerTime: toNumberOrNull(viewRow.avg_first_tower_time),
-            lastMatchTime: viewRow.last_match_time ?? null,
-            minScore: null,
-            maxScore: null,
-            minScoreMatchId: null,
-            maxScoreMatchId: null,
-            fastestMatchId: null,
-            fastestMatchDuration: null,
-            longestMatchId: null,
-            longestMatchDuration: null,
-        };
+        if (viewError || !viewRow) return null;
+        return mapLeagueSummaryView(viewRow as Record<string, unknown>);
     });
 }
 
@@ -1306,10 +1089,16 @@ export async function getTeamSummary(teamId: string): Promise<TeamSummary | null
     }
     return withRedisCache(`team-summary:${encodeCachePart(teamId)}`, DAY_IN_SECONDS, async () => {
         const { data, error } = await supabaseClient.from('team_snapshots').select('payload').eq('team_id', teamId).maybeSingle();
-        if (error || !data?.payload) {
-            return null;
+        if (!error && data?.payload) {
+            return data.payload as TeamSummary;
         }
-        return data.payload as TeamSummary;
+        const { data: viewRow, error: viewError } = await supabaseClient
+            .from('team_summary_view')
+            .select(TEAM_VIEW_COLUMNS)
+            .eq('team_id', teamId)
+            .maybeSingle();
+        if (viewError || !viewRow) return null;
+        return mapTeamSummaryView(viewRow as Record<string, unknown>);
     });
 }
 
@@ -1319,14 +1108,176 @@ export async function getSeasonSnapshot(year: number): Promise<SeasonSnapshot | 
     }
     return withRedisCache(`season-snapshot:${year}`, DAY_IN_SECONDS, async () => {
         const { data, error } = await supabaseClient.from('season_snapshots').select('payload').eq('year', year).maybeSingle();
-        if (error || !data?.payload) {
-            return null;
+        if (!error && data?.payload) {
+            return data.payload as SeasonSnapshot;
         }
-        return data.payload as SeasonSnapshot;
+        return buildSeasonSnapshotFromMatches(year);
     });
 }
 
-export type LeagueMatchStats = Record<string, { matches: number; teams: Set<string>; radiantWins: number }>;
+async function buildSeasonSnapshotFromMatches(year: number): Promise<SeasonSnapshot | null> {
+    const start = `${year}-01-01T00:00:00Z`;
+    const end = `${year + 1}-01-01T00:00:00Z`;
+    type Row = {
+        match_id: string | number;
+        league_id: string | number | null;
+        start_time: string | null;
+        duration: number | null;
+        radiant_score: number | null;
+        dire_score: number | null;
+        radiant_win: boolean | null;
+        radiant_team_id: string | number | null;
+        dire_team_id: string | number | null;
+    };
+    const rows = await paginate<Row>((from, to) =>
+        supabaseClient
+            .from('matches')
+            .select('match_id,league_id,start_time,duration,radiant_score,dire_score,radiant_win,radiant_team_id,dire_team_id')
+            .gte('start_time', start)
+            .lt('start_time', end)
+            .order('start_time', { ascending: true })
+            .range(from, to),
+    );
+
+    if (rows.length === 0) {
+        return null;
+    }
+
+    const totalMatches = rows.length;
+    let durationSum = 0;
+    let scoreSum = 0;
+    let radiantWins = 0;
+    let minScore = Number.POSITIVE_INFINITY;
+    let maxScore = Number.NEGATIVE_INFINITY;
+    let minScoreMatchId: string | null = null;
+    let maxScoreMatchId: string | null = null;
+    let fastestDuration = Number.POSITIVE_INFINITY;
+    let longestDuration = Number.NEGATIVE_INFINITY;
+    let fastestMatchId: string | null = null;
+    let longestMatchId: string | null = null;
+    let lastMatchDate: string | null = null;
+
+    const leagueCounts = new Map<string, number>();
+    const teamStats = new Map<string, { matches: number; radiantMatches: number; direMatches: number; radiantWins: number; direWins: number }>();
+    const monthlyDurationAgg = new Map<string, { sum: number; count: number }>();
+    const monthlyScoreAgg = new Map<string, { sum: number; count: number }>();
+
+    const bumpTeam = (id: string, isRadiant: boolean, win: boolean) => {
+        const current = teamStats.get(id) ?? { matches: 0, radiantMatches: 0, direMatches: 0, radiantWins: 0, direWins: 0 };
+        current.matches += 1;
+        if (isRadiant) {
+            current.radiantMatches += 1;
+            if (win) current.radiantWins += 1;
+        } else {
+            current.direMatches += 1;
+            if (win) current.direWins += 1;
+        }
+        teamStats.set(id, current);
+    };
+
+    for (const row of rows) {
+        const matchId = String(row.match_id);
+        const score = (row.radiant_score ?? 0) + (row.dire_score ?? 0);
+        const duration = row.duration ?? 0;
+        durationSum += duration;
+        scoreSum += score;
+        if (row.radiant_win) radiantWins += 1;
+        if (score < minScore) { minScore = score; minScoreMatchId = matchId; }
+        if (score > maxScore) { maxScore = score; maxScoreMatchId = matchId; }
+        if (duration > 0 && duration < fastestDuration) { fastestDuration = duration; fastestMatchId = matchId; }
+        if (duration > longestDuration) { longestDuration = duration; longestMatchId = matchId; }
+        if (row.start_time) {
+            if (!lastMatchDate || row.start_time > lastMatchDate) lastMatchDate = row.start_time;
+            const month = row.start_time.slice(0, 7);
+            const dAgg = monthlyDurationAgg.get(month) ?? { sum: 0, count: 0 };
+            dAgg.sum += duration; dAgg.count += 1;
+            monthlyDurationAgg.set(month, dAgg);
+            const sAgg = monthlyScoreAgg.get(month) ?? { sum: 0, count: 0 };
+            sAgg.sum += score; sAgg.count += 1;
+            monthlyScoreAgg.set(month, sAgg);
+        }
+        if (row.league_id !== null && row.league_id !== undefined) {
+            const lid = String(row.league_id);
+            leagueCounts.set(lid, (leagueCounts.get(lid) ?? 0) + 1);
+        }
+        if (row.radiant_team_id !== null && row.radiant_team_id !== undefined) {
+            bumpTeam(String(row.radiant_team_id), true, Boolean(row.radiant_win));
+        }
+        if (row.dire_team_id !== null && row.dire_team_id !== undefined) {
+            bumpTeam(String(row.dire_team_id), false, !row.radiant_win);
+        }
+    }
+
+    const [allLeagues, allTeams] = await Promise.all([getLeagues(), getTeams()]);
+    const leagueLookup = new Map(allLeagues.map((league) => [league.id, league]));
+    const teamLookup = new Map(allTeams.map((team) => [team.id, team]));
+
+    const leaguesList = Array.from(leagueCounts.entries())
+        .map(([id, matchCount]) => {
+            const league = leagueLookup.get(id);
+            return league ? { id, name: league.name, slug: league.slug, matchCount } : null;
+        })
+        .filter((entry): entry is { id: string; name: string; slug: string; matchCount: number } => Boolean(entry))
+        .sort((a, b) => b.matchCount - a.matchCount);
+
+    const teamsList = Array.from(teamStats.entries())
+        .map(([id, stats]) => {
+            const team = teamLookup.get(id);
+            if (!team) return null;
+            const radiantWinrate = stats.radiantMatches ? (stats.radiantWins / stats.radiantMatches) * 100 : 0;
+            const direWinrate = stats.direMatches ? (stats.direWins / stats.direMatches) * 100 : 0;
+            const overallWinrate = stats.matches ? ((stats.radiantWins + stats.direWins) / stats.matches) * 100 : 0;
+            return {
+                id,
+                name: team.name,
+                slug: team.slug,
+                matchCount: stats.matches,
+                radiantWinrate,
+                direWinrate,
+                overallWinrate,
+            };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+        .sort((a, b) => b.matchCount - a.matchCount);
+
+    const monthsSorted = Array.from(new Set([...monthlyDurationAgg.keys(), ...monthlyScoreAgg.keys()])).sort();
+    const monthlyDuration = monthsSorted.map((month) => {
+        const agg = monthlyDurationAgg.get(month);
+        return { month, value: agg && agg.count ? agg.sum / agg.count : 0 };
+    });
+    const monthlyScore = monthsSorted.map((month) => {
+        const agg = monthlyScoreAgg.get(month);
+        return { month, value: agg && agg.count ? agg.sum / agg.count : 0 };
+    });
+
+    return {
+        year,
+        totals: {
+            totalMatches,
+            avgDuration: totalMatches ? durationSum / totalMatches : 0,
+            avgScore: totalMatches ? scoreSum / totalMatches : 0,
+            avgFirstTowerTime: null,
+            radiantWinRate: totalMatches ? (radiantWins / totalMatches) * 100 : 0,
+            minScore: Number.isFinite(minScore) ? minScore : 0,
+            maxScore: Number.isFinite(maxScore) ? maxScore : 0,
+            minScoreMatchId,
+            maxScoreMatchId,
+            fastestMatchId,
+            fastestMatchDuration: Number.isFinite(fastestDuration) ? fastestDuration : null,
+            longestMatchId,
+            longestMatchDuration: Number.isFinite(longestDuration) ? longestDuration : null,
+            lastMatchDate,
+        },
+        activeLeagues: leagueCounts.size,
+        activeTeams: teamStats.size,
+        monthlyDuration,
+        monthlyScore,
+        leagues: leaguesList,
+        teams: teamsList,
+        pickBan: { picked: [], banned: [], contested: [] },
+        topPerformers: [],
+    };
+}
 
 export type LeagueSummary = {
     leagueId: string;
@@ -1433,20 +1384,6 @@ export type SeasonSnapshot = {
     }>;
 };
 
-export type TeamMatchStats = Record<
-    string,
-    {
-        totalMatches: number;
-        durationSum: number;
-        scoreSum: number;
-        radiantMatches: number;
-        direMatches: number;
-        radiantWins: number;
-        direWins: number;
-        lastMatch: string | null;
-    }
->;
-
 const parsePickBans = (value: unknown): PickBanEntry[] => {
     if (!value) {
         return [];
@@ -1482,170 +1419,6 @@ const bucketToSorted = (bucket: Record<string, { heroId: string; team: number | 
         .slice(0, limit)
         .map((row) => ({ heroId: row.heroId, team: row.team, total: row.total }));
 
-export async function getLeagueMatchStats(): Promise<LeagueMatchStats> {
-    const stats: LeagueMatchStats = {};
-
-    const accumulate = (rows: Array<Record<string, unknown>>) => {
-        rows.forEach((row) => {
-            const leagueId = row.league_id ? String(row.league_id) : '';
-            if (!leagueId) {
-                return;
-            }
-            if (!stats[leagueId]) {
-                stats[leagueId] = { matches: 0, teams: new Set(), radiantWins: 0 };
-            }
-            const entry = stats[leagueId];
-            entry.matches += 1;
-            if (row.radiant_team_id) {
-                entry.teams.add(String(row.radiant_team_id));
-            }
-            if (row.dire_team_id) {
-                entry.teams.add(String(row.dire_team_id));
-            }
-            if (row.radiant_win) {
-                entry.radiantWins += 1;
-            }
-        });
-    };
-
-    if (!supabase) {
-        accumulate(
-            mockMatches.map((match) => ({
-                league_id: match.leagueId,
-                radiant_team_id: match.radiantTeamId,
-                dire_team_id: match.direTeamId,
-                radiant_win: match.radiantWin,
-            })),
-        );
-        return stats;
-    }
-
-    const pageSize = 1000;
-    let from = 0;
-
-    while (true) {
-        const { data, error } = await supabaseClient
-            .from('matches')
-            .select('league_id,radiant_team_id,dire_team_id,radiant_win')
-            .range(from, from + pageSize - 1);
-
-        if (error) {
-            return stats;
-        }
-
-        if (!data?.length) {
-            break;
-        }
-
-        accumulate(data as Array<Record<string, unknown>>);
-        from += pageSize;
-    }
-
-    return stats;
-}
-
-export async function getTeamMatchStats(): Promise<TeamMatchStats> {
-    const stats: TeamMatchStats = {};
-
-    const initTeam = (teamId: string) => {
-        if (!stats[teamId]) {
-            stats[teamId] = {
-                totalMatches: 0,
-                durationSum: 0,
-                scoreSum: 0,
-                radiantMatches: 0,
-                direMatches: 0,
-                radiantWins: 0,
-                direWins: 0,
-                lastMatch: null,
-            };
-        }
-    };
-
-    const updateLastMatch = (teamId: string, startTime: string | null) => {
-        if (!startTime) {
-            return;
-        }
-        const existing = stats[teamId].lastMatch;
-        if (!existing || new Date(startTime).getTime() > new Date(existing).getTime()) {
-            stats[teamId].lastMatch = startTime;
-        }
-    };
-
-    const accumulate = (rows: Array<Record<string, unknown>>) => {
-        rows.forEach((row) => {
-            const radiantId = row.radiant_team_id ? String(row.radiant_team_id) : null;
-            const direId = row.dire_team_id ? String(row.dire_team_id) : null;
-            const duration = Number(row.duration ?? 0);
-            const score = Number(row.radiant_score ?? 0) + Number(row.dire_score ?? 0);
-            const startTime = row.start_time ? String(row.start_time) : null;
-            const radiantWin = Boolean(row.radiant_win ?? false);
-
-            if (radiantId) {
-                initTeam(radiantId);
-                stats[radiantId].totalMatches += 1;
-                stats[radiantId].durationSum += duration;
-                stats[radiantId].scoreSum += score;
-                stats[radiantId].radiantMatches += 1;
-                if (radiantWin) {
-                    stats[radiantId].radiantWins += 1;
-                }
-                updateLastMatch(radiantId, startTime);
-            }
-
-            if (direId) {
-                initTeam(direId);
-                stats[direId].totalMatches += 1;
-                stats[direId].durationSum += duration;
-                stats[direId].scoreSum += score;
-                stats[direId].direMatches += 1;
-                if (!radiantWin) {
-                    stats[direId].direWins += 1;
-                }
-                updateLastMatch(direId, startTime);
-            }
-        });
-    };
-
-    if (!supabase) {
-        accumulate(
-            mockMatches.map((match) => ({
-                radiant_team_id: match.radiantTeamId,
-                dire_team_id: match.direTeamId,
-                duration: match.duration,
-                radiant_score: match.radiantScore,
-                dire_score: match.direScore,
-                radiant_win: match.radiantWin,
-                start_time: match.startTime,
-            })),
-        );
-        return stats;
-    }
-
-    const pageSize = 1000;
-    let from = 0;
-
-    while (true) {
-        const { data, error } = await supabaseClient
-            .from('matches')
-            .select('start_time,duration,radiant_score,dire_score,radiant_win,radiant_team_id,dire_team_id')
-            .range(from, from + pageSize - 1);
-
-        if (error) {
-            break;
-        }
-
-        if (!data?.length) {
-            break;
-        }
-
-        accumulate(data as Array<Record<string, unknown>>);
-        from += pageSize;
-    }
-
-    return stats;
-}
-
 export async function getLeagueSummaries(): Promise<LeagueSummary[]> {
     if (!supabase) {
         return [];
@@ -1653,11 +1426,26 @@ export async function getLeagueSummaries(): Promise<LeagueSummary[]> {
 
     return withRedisCache('league-summaries', DAY_IN_SECONDS, async () => {
         const { data, error } = await supabaseClient.from('league_snapshots').select('payload');
-        if (error || !data) {
-            return [];
+        const fromSnapshots = !error && data
+            ? data.map((row) => row.payload as LeagueSummary).filter(Boolean)
+            : [];
+
+        const { data: viewRows, error: viewError } = await supabaseClient
+            .from('league_summary_view')
+            .select(LEAGUE_VIEW_COLUMNS);
+
+        if (viewError || !viewRows) {
+            return fromSnapshots;
         }
 
-        return data.map((row) => row.payload as LeagueSummary).filter(Boolean);
+        const byId = new Map(fromSnapshots.map((summary) => [summary.leagueId, summary]));
+        for (const row of viewRows as Array<Record<string, unknown>>) {
+            const id = String(row.league_id);
+            if (byId.has(id)) continue;
+            const summary = mapLeagueSummaryView(row);
+            if (summary) byId.set(id, summary);
+        }
+        return Array.from(byId.values());
     });
 }
 
@@ -1668,11 +1456,26 @@ export async function getTeamSummaries(): Promise<TeamSummary[]> {
 
     return withRedisCache('team-summaries', DAY_IN_SECONDS, async () => {
         const { data, error } = await supabaseClient.from('team_snapshots').select('payload');
-        if (error || !data) {
-            return [];
+        const fromSnapshots = !error && data
+            ? data.map((row) => row.payload as TeamSummary).filter(Boolean)
+            : [];
+
+        const { data: viewRows, error: viewError } = await supabaseClient
+            .from('team_summary_view')
+            .select(TEAM_VIEW_COLUMNS);
+
+        if (viewError || !viewRows) {
+            return fromSnapshots;
         }
 
-        return data.map((row) => row.payload as TeamSummary).filter(Boolean);
+        const byId = new Map(fromSnapshots.map((summary) => [summary.teamId, summary]));
+        for (const row of viewRows as Array<Record<string, unknown>>) {
+            const id = String(row.team_id);
+            if (byId.has(id)) continue;
+            const summary = mapTeamSummaryView(row);
+            if (summary) byId.set(id, summary);
+        }
+        return Array.from(byId.values());
     });
 }
 
@@ -1711,27 +1514,14 @@ export async function getLeaguePickBanStats(
     }
 
     return withRedisCache(`pickban:league:${encodeCachePart(leagueId)}:${limit}`, SIX_HOURS_IN_SECONDS, async () => {
-        const pageSize = 1000;
-        let from = 0;
-
-        while (true) {
-            const { data, error } = await supabaseClient
+        const rows = await paginate<Record<string, unknown>>((from, to) =>
+            supabaseClient
                 .from('matches')
                 .select('picks_bans')
                 .eq('league_id', leagueId)
-                .range(from, from + pageSize - 1);
-
-            if (error) {
-                break;
-            }
-
-            if (!data?.length) {
-                break;
-            }
-
-            accumulate(data as Array<Record<string, unknown>>);
-            from += pageSize;
-        }
+                .range(from, to),
+        );
+        accumulate(rows);
 
         return {
             mostPicked: bucketToSorted(mostPicked, limit),
@@ -1845,38 +1635,32 @@ export async function getLeaguePickBanAnalysis(
                 return teams[teamId];
             };
 
-            const pageSize = 1000;
-            let from = 0;
-
-            while (true) {
-                const { data, error } = await supabaseClient
+            const rows = await paginate<Record<string, unknown>>((from, to) =>
+                supabaseClient
                     .from('matches')
                     .select('picks_bans,radiant_win,radiant_team_id,dire_team_id')
                     .eq('league_id', leagueId)
-                    .range(from, from + pageSize - 1);
+                    .range(from, to),
+            );
 
-                if (error || !data?.length) {
-                    break;
-                }
+            for (const row of rows) {
+                totalMatches += 1;
+                const radiantId = row.radiant_team_id ? String(row.radiant_team_id) : null;
+                const direId = row.dire_team_id ? String(row.dire_team_id) : null;
+                const radiantWin = Boolean(row.radiant_win);
+                const entries = parsePickBans(row.picks_bans);
 
-                (data as Array<Record<string, unknown>>).forEach((row) => {
-                    totalMatches += 1;
-                    const radiantId = row.radiant_team_id ? String(row.radiant_team_id) : null;
-                    const direId = row.dire_team_id ? String(row.dire_team_id) : null;
-                    const radiantWin = Boolean(row.radiant_win);
-                    const entries = parsePickBans(row.picks_bans);
-
-                    if (!entries.length) {
-                        if (radiantId) ensureTeam(radiantId).matches += 1;
-                        if (direId) ensureTeam(direId).matches += 1;
-                        return;
-                    }
-
-                    matchesWithDraft += 1;
+                if (!entries.length) {
                     if (radiantId) ensureTeam(radiantId).matches += 1;
                     if (direId) ensureTeam(direId).matches += 1;
+                    continue;
+                }
 
-                    entries.forEach((entry) => {
+                matchesWithDraft += 1;
+                if (radiantId) ensureTeam(radiantId).matches += 1;
+                if (direId) ensureTeam(direId).matches += 1;
+
+                entries.forEach((entry) => {
                         const heroId = String(entry.hero_id ?? '');
                         if (!heroId) return;
 
@@ -1932,10 +1716,6 @@ export async function getLeaguePickBanAnalysis(
                             }
                         }
                     });
-                });
-
-                if (data.length < pageSize) break;
-                from += pageSize;
             }
 
             const denom = matchesWithDraft || 1;
@@ -2037,7 +1817,7 @@ export async function getTeamPickBanStats(
         });
     };
 
-    if (!supabase || !teamId) {
+    if (!supabase || !teamId || !isNumericId(teamId)) {
         return {
             mostPicked: [],
             mostBanned: [],
@@ -2046,27 +1826,14 @@ export async function getTeamPickBanStats(
     }
 
     return withRedisCache(`pickban:team:${encodeCachePart(teamId)}:${limit}`, SIX_HOURS_IN_SECONDS, async () => {
-        const pageSize = 1000;
-        let from = 0;
-
-        while (true) {
-            const { data, error } = await supabaseClient
+        const rows = await paginate<Record<string, unknown>>((from, to) =>
+            supabaseClient
                 .from('matches')
                 .select('picks_bans,radiant_team_id,dire_team_id')
-                .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`)
-                .range(from, from + pageSize - 1);
-
-            if (error) {
-                break;
-            }
-
-            if (!data?.length) {
-                break;
-            }
-
-            accumulate(data as Array<Record<string, unknown>>);
-            from += pageSize;
-        }
+                .or(teamOrFilter(teamId))
+                .range(from, to),
+        );
+        accumulate(rows);
 
         return {
             mostPicked: bucketToSorted(mostPicked, limit),
@@ -2076,29 +1843,3 @@ export async function getTeamPickBanStats(
     });
 }
 
-export async function getMatchCountByLeague(leagueId: string): Promise<number> {
-    if (!supabase) {
-        return mockMatches.filter((match) => match.leagueId === leagueId).length;
-    }
-
-    return withRedisCache(`match-count:league:${encodeCachePart(leagueId)}`, DAY_IN_SECONDS, async () => {
-        const { count } = await supabaseClient.from('matches').select('match_id', { count: 'exact', head: true }).eq('league_id', leagueId);
-
-        return count ?? 0;
-    });
-}
-
-export async function getMatchCountByTeam(teamId: string): Promise<number> {
-    if (!supabase) {
-        return mockMatches.filter((match) => match.radiantTeamId === teamId || match.direTeamId === teamId).length;
-    }
-
-    return withRedisCache(`match-count:team:${encodeCachePart(teamId)}`, DAY_IN_SECONDS, async () => {
-        const { count } = await supabaseClient
-            .from('matches')
-            .select('match_id', { count: 'exact', head: true })
-            .or(`radiant_team_id.eq.${teamId},dire_team_id.eq.${teamId}`);
-
-        return count ?? 0;
-    });
-}
