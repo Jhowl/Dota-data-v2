@@ -14,6 +14,7 @@ import {
 import { setRequestLocale, getTranslations } from "next-intl/server";
 
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { CommentsSection } from "@/components/comments/comments-section";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { ShareButton } from "@/components/share-button";
 import { Badge } from "@/components/ui/badge";
@@ -887,6 +888,7 @@ export default async function LeaguePage({ params }: LeaguePageProps) {
             </section>
           </>
         )}
+        <CommentsSection entityType="league" entityId={league.id} />
       </article>
     </>
   );

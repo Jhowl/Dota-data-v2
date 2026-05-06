@@ -3,6 +3,7 @@ import Script from "next/script";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { CommentsSection } from "@/components/comments/comments-section";
 import { ShareButton } from "@/components/share-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -533,6 +534,7 @@ export default async function TeamPage({ params }: TeamPageProps) {
           </Card>
         </>
       )}
+        <CommentsSection entityType="team" entityId={team.id} />
       </div>
     </>
   );
